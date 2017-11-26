@@ -1,0 +1,45 @@
+name:                diffhask
+version:             0.1.0.0
+description:         DSL for forward and reverse mode automatic differentiation in haskell.  instpired by DiffSharp.
+homepage:            https://github.com/o1lo01ol1o/diffhask
+bug-reports:         https://github.com/o1lo01ol1o/diffhask/issues
+license:             MIT
+license-file:        LICENSE
+author:              Tim Pierson
+maintainer:          tim.pierson@gmail.com
+copyright:           2017 Tim Pierson
+category:            Math
+build-type:          Simple
+extra-source-files:  README.md
+cabal-version:       >=1.10
+tested-with:         GHC == 8.2.2
+
+library
+  hs-source-dirs:      src
+  exposed-modules:     Lib
+  ghc-options:         -Wall
+  build-depends:       base
+  default-language:    Haskell2010
+
+test-suite diffhask-test
+  type:                exitcode-stdio-1.0
+  hs-source-dirs:      test
+  main-is:             Spec.hs
+  build-depends:       base
+                     , diffhask
+  ghc-options:         -Wall -Werror -threaded -rtsopts -with-rtsopts=-N
+  default-language:    Haskell2010
+
+benchmark diffhask-benchmark
+  type:                exitcode-stdio-1.0
+  default-language:    Haskell2010
+  ghc-options:         -Wall -Werror -O2 -threaded -rtsopts -with-rtsopts=-N
+  hs-source-dirs:      benchmark
+  main-is:             Main.hs
+  build-depends:       base
+                     , criterion
+                     , diffhask
+
+source-repository head
+  type:                git
+  location:            https://github.com/o1lo01ol1o/diffhask.git
