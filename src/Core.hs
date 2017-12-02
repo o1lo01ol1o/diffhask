@@ -3,6 +3,8 @@
 {-#LANGUAGE TypeFamilies #-}
 {-#LANGUAGE FunctionalDependencies #-}
 {-#LANGUAGE MultiParamTypeClasses#-}
+{-#LANGUAGE FlexibleInstances #-}
+
 module Core
     ( 
     ) where
@@ -17,7 +19,7 @@ data Delta a
   = X (D a)
   | XNeg (D a)
 
--- make this take a state monad to keep track of all these things.
+-- We have a separate instance function for each type of arity.  This could be more elegant if the GADT deep embedding and this type class were refactord to vinly records.
 class Trace op a where
   resetRec0 :: op -> [TraceOp a] -> Fanouts
   pushRec0 :: op -> Adjoints a -> [TraceOp a] -> ()
@@ -32,7 +34,8 @@ class Trace op a where
   {-# MINIMAL (resetRec0, pushRec0)
             | (resetRec1, pushRec1)
             | (resetRec2, pushRec2)
-            | (resetRecIx, pushRecIx) | (resetRecQ, pushRecQ) #-}
+            | (resetRecIx, pushRecIx)
+            | (resetRecQ, pushRecQ) #-}
 
 -- Deep embedding is the arity of the trace
 data TraceOp a where
@@ -48,6 +51,7 @@ instance Trace Noop a where
   resetRec0 = undefined
   pushRec0 _ _ _ = ()
 
+--FIXME: the tensorflow haskell bindings have a neat Int generator for creating ordered tags without IO.
 type Tag = Integer
 
 type UID = Integer
@@ -59,10 +63,11 @@ supplyValue = undefined
 type Primal a = D a
 type Tangent a = D a
 
+--FIXME:  D a means that instances for datatypes that track type level information such as shape will not compose.  
 data D a where
   D :: a -> D a
   DF :: Primal a -> Tangent a -> UID -> D a
-  DR :: Trace trace => D a -> trace -> Tag -> UID -> D a
+  DR :: Trace trace a => D a -> trace -> Tag -> UID -> D a
 
 instance (Eq a) => Eq (D a) where
   d1 == d2 = pD d1 == pD d2
@@ -72,7 +77,7 @@ instance (Ord a) => Ord (D a) where
   d1 `compare` d2 = pD d1 `compare` pD d2
   
 -- Make a reverse node
-r :: (Trace at) => D a -> at -> Tag -> D a
+r :: (Trace at a) => D a -> at -> Tag -> D a
 r d op ai =
   let uid = supplyValue
   in DR d op ai uid

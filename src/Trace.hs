@@ -5,12 +5,9 @@ import Core
 
 data Add
 
-instance Trace Add where
+instance Trace Add a where
+  resetRec2 = undefined
+  pushRec2 = undefined
 
-data TraceOp a =
-    | Add (D a) (D a)
-    | Add_Cons (D a)
-    | Sub (D a)(D a)
-    | Sub_Cons (D a)
-    | Mul (D a) (D a)
-    
+
+--implement these and then do the operator overloads and mkGrads functions.
