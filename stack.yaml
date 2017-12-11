@@ -29,6 +29,8 @@ extra-deps:
 - js-flot-0.8.3
 - js-jquery-3.2.1
 - math-functions-0.2.1.0
+- microlens-0.4.8.1
+- microlens-th-0.4.1.1
 - microstache-1.0.1.1
 - monad-par-0.3.4.8
 - monad-par-extras-0.3.3

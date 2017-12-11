@@ -21,6 +21,9 @@ library
   build-depends:       base
                      , value-supply
                      , containers
+                     , mtl
+                     , microlens
+                       , microlens-th
 
   default-language:    Haskell2010
 
