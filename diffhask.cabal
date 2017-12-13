@@ -16,7 +16,7 @@ tested-with:         GHC == 8.2.2
 
 library
   hs-source-dirs:      src
-  exposed-modules:     Core, Trace
+  exposed-modules:     Core, Num, Ops
   ghc-options:         -Wall
   build-depends:       base
                      , value-supply
