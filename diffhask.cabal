@@ -17,13 +17,16 @@ tested-with:         GHC == 8.2.2
 library
   hs-source-dirs:      src
   exposed-modules:     Core, Num, Ops
-  ghc-options:         -Wall
+  ghc-options:         -Wall -fllvm -O2
+  default-extensions: NegativeLiterals OverloadedStrings UnicodeSyntax
   build-depends:       base
                      , value-supply
                      , containers
                      , mtl
+                     , text
                      , microlens
-                       , microlens-th
+                     , microlens-th
+                     , vector
 
   default-language:    Haskell2010
 
@@ -31,15 +34,22 @@ test-suite diffhask-test
   type:                exitcode-stdio-1.0
   hs-source-dirs:      test
   main-is:             Spec.hs
+  default-extensions: NegativeLiterals OverloadedStrings UnicodeSyntax
   build-depends:       base
                      , diffhask
-  ghc-options:         -Wall -Werror -threaded -rtsopts -with-rtsopts=-N
+                       , text
+                     , QuickCheck
+                     , doctest
+                     , tasty
+                     , tasty-quickcheck
+  
+  ghc-options:         -Wall -Werror -threaded -fllvm -O2 -rtsopts -with-rtsopts=-N
   default-language:    Haskell2010
 
-benchmark diffhask-benchmark
+benchmark diffhask-benchmark 
   type:                exitcode-stdio-1.0
   default-language:    Haskell2010
-  ghc-options:         -Wall -Werror -O2 -threaded -rtsopts -with-rtsopts=-N
+  ghc-options:         -Wall -Werror -O2 -fllvm -threaded -rtsopts -with-rtsopts=-N
   hs-source-dirs:      benchmark
   main-is:             Main.hs
   build-depends:       base

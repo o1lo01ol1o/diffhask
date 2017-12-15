@@ -8,18 +8,21 @@
 {-#LANGUAGE PolyKinds #-}
 {-#Language DataKinds #-}
 {-#Language TemplateHaskell #-}
-{-#LANGUAGE UndecidableInstances #-} -- FIXME: collapse type classes so we can drop this.
+{-#Language NoImplicitPrelude #-}
 
+{-#Language UndecidableInstances #-}
 module Core
     ( module Core
     ) where
 
-import qualified Data.Map as M (Map, updateLookupWithKey, insert, empty, lookup)
+import qualified Data.Map as M (Map, updateLookupWithKey, insert, empty, lookup, update)
 import Lens.Micro.TH (makeLenses)
+import Prelude hiding ((+), (*), (-))
+import qualified Prelude as P 
 import Lens.Micro ((^.), (.~), (&), (%~))
 import Control.Monad.State.Strict
-       (State,  get, modify, put, gets, (>=>))
-import Ops (Noop(..), Add(..))
+       (State,  get, modify, put, gets, (>=>), evalState, runState)
+import Ops (Noop(..), Add(..), Subtract(..), Multiply(..))
 
 
 --The types of arity an operation can have
@@ -33,11 +36,6 @@ data Arity
   | FxPoint
 
 
-data DualExp (ar:: Arity) a where
-  UExp:: UCons a -> DualExp 'Unary a
-  SBExp :: BCons a -> DualExp 'SymmetricBinary a
-  BExp:: BCons a -> BCons a -> DualExp ar a
-
 -- the tape at a binary operation will either have two expressions (one to each arugment of the op) or a single expression
 type family OpArity op :: Arity -- Encodes the arity of the arguments of the op
 
@@ -46,30 +44,27 @@ type family OpArity op :: Arity -- Encodes the arity of the arguments of the op
 -- To store the adoint we have to keep track of the outputs of an operation as well as the expressions that yeild the dual of the input arguments
 data DualTrace op a where
   N :: op -> DualTrace op a
-  U :: op -> TNode a -> UCons a -> DualTrace op a
-  B :: op -> TNode a -> TNode a -> BCons a -> BCons a -> DualTrace op a
-  IxU :: op -> TNode a -> [Int] -> UCons a -> DualTrace op a
+  U :: op -> D a -> DualTrace op a
+  B :: op -> D a -> D a -> DualTrace op a
+  IxU :: op -> D a -> [Int]  -> DualTrace op a
   FxP :: op ->  FptNode a -> DualTrace op a
 
-type TNode a = D a -- output of an op
+instance (Show op, Show a) => Show (DualTrace op a) where
+  show (N o) = "N " ++ show o
+  show (U o t ) = "U " ++ show o ++ show t -- ++ show c
+  show (B o t tt) = "B " ++ show o ++ show t ++ show tt
+  show (IxU o t ix ) = "IxU " ++ show o ++ show t ++ show ix
+  show (FxP o (a, b, c, d)) = "Fxp "  ++ show o ++ show a ++ show b ++ show c ++ show d
+ 
 
-type UCons a = (D a -> D a) -- expression for the dual component of an Unary operator
+type FptNode a = (D a, D a, D a, D a) -- nodes needed for a fixpoint evaluation
 
-type BCons a = (D a -> D a -> D a)  -- expression for the dual component of a Binary operator
-
-type FptNode a = (TNode a, TNode a, TNode a, TNode a) -- nodes needed for a fixpoint evaluation
-
--- We're going to define duals as a type class because we need to keep track of their expressions in the tape
-class Dual op a where
-  dual :: op -> DualExp (OpArity op) a
 
 newtype Tag = Tag Int
-  deriving (Eq, Ord)
+  deriving (Eq, Ord, Show)
 
 newtype UID = UID Int
-  deriving (Eq, Ord)
-
-
+  deriving (Eq, Ord, Show)
 
 
 type Fanouts = M.Map UID Tag
@@ -86,13 +81,6 @@ data ComputationState a = ComputationState
   , _maxFpIter :: Int
   }
 
-
-
-  
-initComp = ComputationState (Tag 0) (UID 0) M.empty M.empty 1e-6 1000
-
-
-
 type Computation a = State (ComputationState a)
 
 data D a where
@@ -100,15 +88,20 @@ data D a where
   DF :: Primal a -> Tangent a -> Tag -> D a
   DR :: (Trace op a) => D a -> DualTrace op a -> Tag -> UID -> D a
 
+instance (Show a, Show Tag, Show UID ) => Show (D a) where
+  show (D a) = "D " ++ show a
+  show (DF p t ti) = "DF " ++ show p ++ show t ++ show ti
+  show (DR p dt ti uid) = "DR " ++ show p ++ "-- fixme --" ++ show ti ++ show uid
+
 type Primal a = D a
 type Tangent a = D a
-
 
 
 -- the accumulated adjoint at a given node in reverse-mode is aliased as a Delta
 data Delta a
   = X (D a)
   | XNeg (D a)
+  deriving (Show)
 
 -- FIXME: singleton types on the DualTrace / Arity combination would restrict at least resetEl to a single possible implementation.
 class Trace op a where
@@ -122,14 +115,14 @@ getNextTag :: Computation a (Tag)
 getNextTag = do
   st <- get
   let tg@(Tag t) = st ^. nextTag
-  put (st & nextTag .~ (Tag (t + 1)))
+  put (st & nextTag .~ (Tag (t P.+ 1)))
   return tg
   
 getNextUID :: Computation a (UID)
 getNextUID = do
   st <- get
   let tg@(UID t) = st ^. nextUID
-  put (st & nextUID .~ (UID (t + 1)))
+  put (st & nextUID .~ (UID (t P.+ 1)))
   return tg
 
 
@@ -141,19 +134,30 @@ instance (Ord a) => Ord (D a) where
   d1 `compare` d2 = pD d1 `compare` pD d2
 
 
-class Unital a where -- Fixme:  figure out the numeric hierarchy we need.
+class Core a where
+  (+) :: D a -> D a -> Computation a (D a)
+  (-) :: D a -> D a -> Computation a (D a)
+  (*) :: D a -> D a -> Computation a (D a)
   zero :: D a
   one :: D a
 
-instance Unital Float where
-  zero = D 0.0
-  one = D 1.0
+type CoreConstraints a = (BinOp Add a, BinOp Subtract a, BinOp Multiply a, Trace Add a, Trace Subtract a, Trace Multiply a, Ord a)
+instance (CoreConstraints Float) => Core Float where
+  (+) a b = binOp Add a b
+  (-) a b = binOp Subtract a b
+  (*) a b = binOp Multiply a b
+  zero = D 0
+  one = D 1
 
-instance Unital Double where
-  zero = D 0.0
-  one = D 1.0
+instance (CoreConstraints Double) => Core Double where
+  (+) a b = binOp Add a b
+  (-) a b = binOp Subtract a b
+  (*) a b = binOp Multiply a b
+  zero = D 0
+  one = D 1
 
--- Integers are not differentiable
+initComp :: (Fractional a) => ComputationState a
+initComp = ComputationState (Tag 0) (UID 0) M.empty M.empty (0.0000001) 1000
 
 
 -- Make a reverse node
@@ -177,9 +181,15 @@ pD =
     D v -> D v
     DF d _ _ -> pD d
     DR d _ _ _ -> pD d
+    
+toNumeric :: D a -> a
 
+toNumeric d =
+  let (D n) = pD d
+  in n
+  
 -- Get Tangent 
-t :: (Unital a) => D a -> Tangent a
+t :: (Core a) => D a -> Tangent a
 t =
   \case
     D _ -> zero
@@ -196,16 +206,16 @@ mkReverse i d = do
   r d (N Noop) i
 
 class MonOp op a where
-  ff :: op -> a -> a
-  fd :: op -> D a -> D a
-  df :: op -> D a -> D a -> D a -> D a
+  ff ::( Computation a ~ m) => op -> a -> a
+  fd :: ( Computation a ~ m) =>  op -> D a -> m (D a)
+  df :: ( Computation a ~ m) =>  op -> D a -> D a -> D a ->m( D a)
 
-monOp' :: (Trace op a) =>
+monOp' :: (Trace op a, Computation a ~ m) =>
      op
   -> D a
   -> (a -> a)
-  -> (D a -> D a)
-  -> (D a -> D a -> D a -> D a)
+  -> (D a -> m (D a))
+  -> (D a -> D a -> D a -> m (D a))
   -> (D a -> DualTrace op a)
   -> Computation a (D a)
 monOp' _ a ff fd df r_ =
@@ -219,15 +229,12 @@ monOp' _ a ff fd df r_ =
       in r cp (r_ a) ai
 
 
-duelExpMon :: (Dual op a, OpArity op ~ 'Unary) => op -> D a -> DualTrace op a
-duelExpMon op a =
-  case dual op of
-    UExp exp -> U op a exp
+
 
     
-monOp :: (MonOp op a, OpArity op ~ 'Unary, Dual op a, (Trace op a)) => op -> D a -> Computation a (D a)
+monOp :: (MonOp op a, (Trace op a)) => op -> D a -> Computation a (D a)
 monOp op a =
-  let r_d = duelExpMon op
+  let r_d =   U op 
   in monOp' op a (ff op) (fd op) (df op) r_d
 
 
@@ -237,10 +244,10 @@ binOp' ::
   -> (D a)
   -> (D a)
   -> (a -> a -> a)
-  -> (D a -> D a -> D a)
-  -> (D a -> D a -> D a -> D a)
-  -> (D a -> D a -> D a -> D a)
-  -> (D a -> D a -> D a -> D a -> D a -> D a)
+  -> (D a -> D a -> m (D a))
+  -> (D a -> D a -> D a -> m (D a))
+  -> (D a -> D a -> D a -> m (D a))
+  -> (D a -> D a -> D a -> D a -> D a -> m (D a))
   -> (D a -> D a -> DualTrace op a)
   -> (D a -> D a -> DualTrace op a)
   -> (D a -> D a -> DualTrace op a)
@@ -292,32 +299,18 @@ binOp' _ a b ff fd df_da df_db df_dab r_d_d r_d_c r_c_d = do
             EQ -> r (fd ap bp) (r_d_d a b) ai
             LT -> r (fd a bp) (r_c_d a b) bi
             GT -> r (fd ap b) (r_d_c a b) ai
--- Creates the expressions for the dual components of the op
-
-{-# INLINE duelExpBin #-}
-
-duelExpBin ::
-     (Dual op a)
-  => op
-  -> D a
-  -> D a
-  -> DualTrace op a
-duelExpBin op a b =
-  case dual op of
-    SBExp ex -> B op a b ex ex -- if the expression in the same in each arguemnt
-    BExp lexp rexp ->  B op a b lexp rexp -- if the expression differes for each arguemnt
-    _ -> error "2-ary operations must have 2-ary duel expressions!"
 
 
 
-binOp :: ( BinOp op a, Dual op a, (Trace op a), Computation a ~ m)
+
+binOp :: ( BinOp op a,(Trace op a), Computation a ~ m)
   =>
   op
   ->  (D a)
   ->  (D a)
   -> m (D a)
 binOp op a b =
-  let traceOp = duelExpBin op
+  let traceOp = B op
       r_d_d = traceOp
       r_d_c = traceOp
       r_c_d = traceOp
@@ -336,9 +329,9 @@ binOp op a b =
 
 class BinOp op a where
   ff_bin :: (Computation a ~ m) => op -> a -> a ->  a
-  fd_bin :: (Computation a ~ m) => op ->  (D a) -> (D a) ->  (D a)
-  df_db :: (Computation a ~ m) => op -> (D a) -> (D a) -> (D a) -> (D a) ->  (D a)
-  df_da :: (Computation a ~ m) => op -> (D a) -> (D a) -> (D a) -> (D a) ->  (D a)
+  fd_bin :: (Computation a ~ m) => op ->  (D a) -> (D a) ->  m (D a)
+  df_db :: (Computation a ~ m) => op -> (D a) -> (D a) -> (D a) -> (D a) -> m (D a)
+  df_da :: (Computation a ~ m) => op -> (D a) -> (D a) -> (D a) -> (D a) -> m (D a)
   df_dab ::
        (Computation a ~ m)
     => op
@@ -349,19 +342,36 @@ class BinOp op a where
     -> (D a)
     -> (D a)
 
-eval :: (Num a, Dual Add a, Num (D a), Unital a ) => Delta a -> D a
+eval :: (Core a) => Delta a -> Computation a (D a)
 eval dl =
   case dl of
-    X v -> v
+    X v -> pure v
     XNeg v -> zero - v
-            
-applyDelta :: (Num a, Dual Add a, Num (D a), Unital a) => UID -> Delta a -> Adjoints a -> (Maybe (D a), Adjoints a)
-applyDelta tag dlta =
-  M.updateLookupWithKey (\k v -> Just $ v + eval dlta) tag
+
+
+           
+applyDelta :: (Core a) => UID -> Delta a -> Adjoints a -> (Maybe (Computation a (D a)))
+applyDelta tag dlta adjs=
+  case M.lookup tag adjs of
+    Just v -> Just $ do
+      e <- eval dlta
+      r <- v + e
+      modify (\st -> st & adjoints .~ M.update (const . Just $ r) tag adjs)
+      return r
+    Nothing -> Nothing
+  -- M.updateLookupWithKey
+  --   (\ k v -> Just $ go dlta k v)
+  --   tag
+  -- where
+  --   go :: Delta a ->  UID -> D a -> (Computation a (D a))
+  --   go dlta k v =  do
+  --      e <- eval dlta
+  --      r <- v + e
+  --      return r
 
 decrementFanout :: UID -> Fanouts -> (Maybe Tag, Fanouts)
 decrementFanout =
-  M.updateLookupWithKey (\k (Tag v) -> Just . Tag $ v - 1)  
+  M.updateLookupWithKey (\k (Tag v) -> Just . Tag $ v P.- 1)  
   
 -- updateStack ls = modify (\ st -> st & stack %~ mappend ls)
   
@@ -369,7 +379,7 @@ incrementFanout :: UID -> Computation a Tag
 incrementFanout u = do
   st <- get
   let (mf, a) =
-        M.updateLookupWithKey (\_ (Tag f) -> Just . Tag $ f + 1) u (st ^. fanouts)
+        M.updateLookupWithKey (\_ (Tag f) -> Just . Tag $ f P.+ 1) u (st ^. fanouts)
   
   (case mf of
       Nothing -> do
@@ -380,7 +390,7 @@ incrementFanout u = do
         return f)
   
 
-reset :: (Unital a) =>  [D a] -> Computation a ()
+reset :: (Core a) => [D a] -> Computation a ()
 reset l =
   case l of
     [] -> return () 
@@ -398,20 +408,21 @@ reset l =
         _ -> error "Can only reset reverse nodes!"
 
 -- recursively pushes nodes onto the reverse mode stack and evaluates partials
-push :: (Num a, Dual Add a, Num (D a), Unital a) => [(Delta a, D a)] -> Computation a ()
+push :: (Core a) =>[(Delta a, D a)] -> Computation a ()
 push l =
   case l of
     [] -> return ()
     ((dl, da):xs) ->
       case da of
         DR _ o _ uniq -> do
-          st <- get
-          let (mv, a) = applyDelta uniq dl $ st ^. adjoints -- verify this
+          st <- gets (\ st -> st ^. adjoints )
+          let mv = applyDelta uniq dl st 
           case mv of
-            Just dA -> do
-              let nst1 = st & adjoints .~ a
+            Just cdA -> do
+              dA <- cdA
+              nst1 <- get
               let (Just fn, aa) = decrementFanout uniq (nst1 ^. fanouts)
-              put (st & fanouts .~ aa)
+              put (nst1 & fanouts .~ aa)
               if fn == Tag 0 then
                 do
                   pd <- pushEl o dA
@@ -420,21 +431,21 @@ push l =
             Nothing -> error "key not found in adjoints!"
         _ -> push xs
 
-reverseReset :: (Unital a) => D a -> Computation a ()
+reverseReset :: (Core a) => D a -> Computation a ()
 reverseReset d = do
   modify (\st -> st & fanouts .~ M.empty )
   reset [d]
 
-reverseProp :: (Num a, Dual Add a, Num (D a), Unital a) =>  D a -> D a -> Computation a ()
+reverseProp :: (Core a) => D a -> D a -> Computation a ()
 reverseProp  v d = do
   reverseReset  d
   push [(X v, d)]
 
 {-# INLINE primalTanget #-}
-primalTanget ::(Unital a) => D a -> (D a, Tangent a)
+primalTanget :: (Core a) => D a -> (D a, Tangent a)
 primalTanget d = (p d, t d)
 
-adjoint :: (Unital a) => D a -> Computation a (D a)
+adjoint :: (Core a) => D a -> Computation a (D a)
 adjoint d =
   case d of
     DR _ _ _ uniq -> do
@@ -444,35 +455,39 @@ adjoint d =
         Nothing -> error "Adjoint not in map!"
     DF{} -> error "Cannot get adjoint value of DF. Use makeReverse on this node when composing the computation."
     D _ -> return zero
-    
+
+
+runComputation f s = runState f s
+
+compute f = evalState f initComp
+
 
 {-# INLINE computeAdjoints' #-}
-computeAdjoints' :: (Dual Add a, Num (D a), Num a, Unital a) => D a -> Computation a ()
+computeAdjoints' :: (Core a) => D a -> Computation a ()
 computeAdjoints' d = do
   modify (\st -> st & adjoints .~ M.empty)
   reverseProp one d
   
 {-# INLINE computeAdjoints #-}
-computeAdjoints ::
-     (Dual Add a, Num (D a), Num a, Unital a) => D a -> Computation a (Adjoints a)
+computeAdjoints :: (Core a) => D a -> Computation a (Adjoints a)
 computeAdjoints d = do
   computeAdjoints' d
   st <- get
   return $ st ^. adjoints
 {-# INLINE diff' #-}
 
-diff' ::(Unital a) => (D a -> D a) -> D a -> Computation a (D a, Tangent a)
+diff' :: (Core a) => (D a -> D a) -> D a -> Computation a (D a, Tangent a)
 diff' f x = do
   n <- getNextTag
   return . primalTanget . f $ mkForward n one x
 {-# INLINE diff #-}
 
-diff ::(Unital a) => (D a -> D a) -> D a -> Computation a (Tangent a)
+diff :: (Core a) => (D a -> D a) -> D a -> Computation a (Tangent a)
 diff f x = 
   snd <$> diff' f x
   
 {-# INLINE diffn #-}
-diffn :: (Unital a) => Int -> (D a -> D a) -> D a -> Computation a (Tangent a)
+diffn :: (Core a) => Int -> (D a -> D a) -> D a -> Computation a (Tangent a)
 diffn n f x =
   if n < 0
     then error "Cannot get the nth derivitive when n is negative!"
@@ -480,15 +495,15 @@ diffn n f x =
            then return $ f x
            else go n f x
   where
-    go ::(Unital a) => Int -> (D a -> D a) -> D a -> Computation a (Tangent a)
+    go :: (Core a) => Int -> (D a -> D a) -> D a -> Computation a (Tangent a)
     go n f =
       case n of
         0 -> diff f
-        _ -> go (n - 1) f >=> diff f
+        _ -> go (n P.- 1) f >=> diff f
 
 {-# INLINE diffn' #-}
 diffn'
-  :: (Unital a) => Int -> (D a -> D a) -> D a -> Computation a (D a, (Tangent a))
+  :: (Core a) => Int -> (D a -> D a) -> D a -> Computation a (D a, (Tangent a))
 diffn' n f x = do
   it <- return $ f x
   again <- diffn n f x
@@ -496,8 +511,8 @@ diffn' n f x = do
   
 {-# INLINE grad' #-}
 grad' ::
-     (Trace Noop a, Dual Add a, Num (D a), Num a, Unital a)
-  => (D a -> (D a))
+     (Trace Noop a, Core a) =>
+  (D a -> (D a))
   -> D a
   -> Computation a (D a, (D a))
 grad' f x = do
@@ -510,8 +525,8 @@ grad' f x = do
   
 {-# INLINE grad #-}
 grad ::
-     (Num (D a), Num a, Dual Add a, Trace Noop a, Unital a)
-  => (D a -> (D a))
+     (Trace Noop a, Core a) =>
+   (D a -> (D a))
   -> D a
   -> Computation a (D a)
 grad f x = do
@@ -519,11 +534,11 @@ grad f x = do
   return g
 
 -- Original value and Jacobian product of `f`, at point `x`, along `v`. Forward AD.
-jacobian' :: (Unital a) =>
+jacobian' :: (Core a) =>
      (D a -> D a) -> Tangent a -> Primal a -> Computation a (D a, Tangent a)
 jacobian' f x v = do
   ntg <- getNextTag
   return . primalTanget . f $ mkForward ntg v x
 
-jacobian :: (Unital a) => (D a -> D a) -> Tangent a -> Primal a -> Computation a (Tangent a)
+jacobian :: (Core a) => (D a -> D a) -> Tangent a -> Primal a -> Computation a (Tangent a)
 jacobian f x v = snd <$> jacobian' f x v

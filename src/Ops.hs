@@ -1,4 +1,4 @@
-module Ops (Noop(..), Add(..), Subtract(..), Negate(..), Multiply(..), FixPoint(..) ) where
+module Ops (module Ops ) where
 
 data Noop = Noop
 
