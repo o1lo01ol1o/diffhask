@@ -6,13 +6,14 @@
 {-# LANGUAGE NoImplicitPrelude          #-}
 module Num (module Num) where
 import           Control.Monad.State.Strict (State, get, gets, modify, put,
-                                             (>=>), join)
+                                             (>=>), join, liftM, liftM2)
 import           Core
 import qualified Data.Map                   as M (Map, empty, insert, lookup,
                                                   updateLookupWithKey)
 import           Lens.Micro                 ((%~), (&), (.~), (^.))
 import            Ops
 import qualified Prelude as P
+import Prelude (pure)
 
 -- $setup
 -- >>> :set -XDataKinds
@@ -21,65 +22,95 @@ import qualified Prelude as P
 -- >>> :set -XFlexibleContexts
 
 
-instance  BinOp Add a where
+instance (P.Num a, Core a) => BinOp Add a where
   {-# INLINE ff_bin #-}
-  ff_bin _ a b =  b +  a
+  ff_bin _ a b =  b P.+  a
   {-# INLINE fd_bin #-}
   fd_bin _ a b =  a + b
   {-# INLINE df_da #-}
-  df_da _ _ _ _ at =  at
+  df_da _ _ _ _ at =  pure at
   {-# INLINE df_db #-}
-  df_db _ _ _ _ bt =  bt
+  df_db _ _ _ _ bt = pure bt
   {-# INLINE df_dab #-}
   df_dab _ _ _ at _ bt =  at + bt
 
-
 instance Trace Add a where
   pushEl (B _ a b) dA =
-    return [(X dA, a), (X dA, b), (X dA, a), (X dA, b)]
-  resetEl (B _ a b) = return [a, b, a, b]
+    pure [(X dA, a), (X dA, b), (X dA, a), (X dA, b)]
+  resetEl (B _ a b) = pure [a, b, a, b]
 
-instance  BinOp Subtract a where
+instance (P.Num a, Core a) => BinOp Subtract a where
   {-# INLINE ff_bin #-}
-  ff_bin _ a b =  a - b
+  ff_bin _ a b =  a P.- b
   {-# INLINE fd_bin #-}
   fd_bin _ a b =  a - b
   {-# INLINE df_da #-}
-  df_da _ _ _ _ at =  at
+  df_da _ _ _ _ at = pure at
   {-# INLINE df_db #-}
-  df_db _ _ _ _ bt =  zero - bt
+  df_db _ _ _ _ bt = zero - bt
   {-# INLINE df_dab #-}
   df_dab _ _ _ at _ bt =  at - bt
 
 instance Trace Subtract a where
-  pushEl (B _ a b ac bc) dA =
-    return [(X dA, a), (XNeg dA, b), (X dA, ac a b), (XNeg dA, bc b a)]
-  resetEl (B _ a b _ _) = return [a, b, a, b]
+  pushEl (B _ a b) dA =
+    pure [(X dA, a), (XNeg dA, b), (X dA, a ), (XNeg dA,b )]
+  resetEl (B _ a b) = pure [a, b, a, b]
 
-instance  BinOp Multiply a where
+
+instance (P.Num a, Core a) => MonOp Sign a where
+  {-# INLINE ff #-}
+  ff _ a = P.signum a
+  {-# INLINE fd #-}
+  fd _ a = signum a
+  {-# INLINE df #-}
+  df _ _ _ _ = pure zero
+
+
+instance Trace Sign a where
+
+
+instance (P.Num a, Core a) => MonOp Abs a where
+  {-# INLINE ff #-}
+  ff _ a = P.abs a
+  {-# INLINE fd #-}
+  fd _ a = abs a
+  {-# INLINE df #-}
+  df _ _ ap at = do
+    sap <- signum ap
+    at * sap
+
+instance Trace Abs a where
+
+  
+
+instance (P.Num a, Core a) => BinOp Multiply a where
   {-# INLINE ff_bin #-}
   ff_bin _ a b =  b P.*  a
   {-# INLINE fd_bin #-}
-  fd_bin _ a b = do
-    aa <- a
-    bb <- b
-    P.pure $ aa * bb
+  fd_bin _ a b = a * b
   {-# INLINE df_da #-}
-  df_da _ b _ _ at = (P.pure at) * b
+  df_da _ b _ _ at = at * b
   {-# INLINE df_db #-}
   df_db _ a _ _ bt =  bt * a
   {-# INLINE df_dab #-}
-  df_dab _ _ ap at bp bt =  at * bp + ap * bt
-
-instance  Trace Multiply a where
-  pushEl (B _ a b ) dA =
-    return [(X (dA * p b), a), (X (dA * p a), b), (X (dA * b), a), (X (dA * a), b)] --- rethink the dual expressions  . . .
-  resetEl (B _ a b ) =return  [a, b, a, b]
+  df_dab _ _ ap at bp bt =  do
+    atbp <- at * bp
+    apbt <- ap * bt
+    atbp + apbt
 
 
+instance (Core a) => Trace Multiply a where
+  pushEl (B _ a b) dA = do
+    cdA <- pure dA
+    opa <- cdA * p b
+    opb <- cdA * p a
+    arga <- cdA * b
+    argb <- cdA * a
+    pure [(X opa, a), (X opb, b), (X arga, a), (X argb, b)] --- rethink the dual expressions  . . .
+  resetEl (B _ a b) = pure [a, b, a, b]
 
 fpPush ::
-     (P.Ord a)
+     (P.Ord a, Core a)
   => D a
   -> D a
   -> D a
@@ -95,7 +126,7 @@ fpPush b bfirst aprev alast dA = do
   P.pure [(X adjBf, b)]
   where
     go ::
-         (P.Ord a)
+         (P.Ord a, Core a)
       => P.Int
       -> D a
       -> P.Int
@@ -110,42 +141,50 @@ fpPush b bfirst aprev alast dA = do
            else do
              adjP <- adjoint apr
              adjL <- adjoint alst
-             if abs (adjP + (d - adjL)) P.<= eps
+             dmadjL <- d - adjL
+             s <- adjP + dmadjL
+             as <- abs s
+             if as P.<= eps
                then P.pure ()
-               else reverseProp (d + adjP) adjL
+               else do
+                 dadjP <- d + adjP
+                 reverseProp (dadjP) adjL
 
-instance (P.Ord a) => Trace FixPoint a where
+instance (P.Ord a, Core a) => Trace FixPoint a where
   pushEl (FxP _ (b, bfirst, aprev, alast)) = fpPush b bfirst aprev alast
   resetEl (FxP _ (b, bf, ap, al)) = P.pure [b]
 
-fixPoint :: (P.Ord a, Trace Noop a) =>(D a -> D a -> D a) -> D a -> D a -> Computation a (D a)
+fixPoint :: (P.Ord a, Trace Noop a, Core a) =>(D a -> D a -> D a) -> D a -> D a -> Computation a (D a)
 fixPoint g a0 b = do
   eps <- gets (\st -> st ^. fpEps)
   mxitr <- gets (\st -> st ^. maxFpIter)
   case b of
-    D _ -> P.pure P.$ goD g (D eps) mxitr 1 a0 b
-    DF _ _ bi -> P.pure P.$ goDF g (D eps) mxitr 1 a0 b bi
+    D _ -> goD g (D eps) mxitr 1 a0 b
+    DF _ _ bi -> goDF g (D eps) mxitr 1 a0 b bi
     DR bp _ bi _ -> goDR g (D eps) mxitr 1 a0 b bi bp
   where
     goD ::
-         (P.Ord a)
+         (P.Ord a, Core a)
       => (D a -> D a -> D a)
       -> D a
       -> P.Int
       -> P.Int
       -> D a
       -> D a
-      -> D a
+      -> Computation a (D a)
     goD g e m i a b =
       let ni = i P.+ 1
       in if ni P.>= m
-           then a
-           else let aa = g a b
-                in if abs (aa - a) P.<= e
-                     then a
+           then pure a
+           else do
+                let aa = g a b
+                d <- aa - a
+                ad <- abs d
+                if ad P.<= e
+                     then pure a
                      else goD g e m ni aa b
     goDF ::
-         (P.Ord a)
+         (P.Ord a, Core a)
       => (D a -> D a -> D a)
       -> D a
       -> P.Int
@@ -153,17 +192,21 @@ fixPoint g a0 b = do
       -> D a
       -> D a
       -> Tag
-      -> D a
+      -> Computation a (D a)
     goDF g e m i a b bi =
       let ni = i P.+ 1
       in if ni P.>= m
-           then DF (p a) (t a) bi
-           else let aa = g a b
-                in if (abs (p aa - p a) P.<= e) P.&& ((t aa - t a) P.<= e)
-                     then DF (p a) (t a) bi
+           then pure P.$ DF (p a) (t a) bi
+           else do
+                let aa = g a b
+                ps <- ( p aa) - (p a)
+                arg <- abs (ps)
+                td <- t aa - t a
+                if (arg P.<= e)  P.&& (td P.<= e)
+                     then pure P.$ DF (p a) (t a) bi
                      else goDF g e m ni aa b bi
     drFin ::
-         ( Trace Noop a, P.Ord a)
+         ( Trace Noop a, P.Ord a, Core a)
       => (D a -> D a -> D a)
       -> D a
       -> Tag
@@ -175,7 +218,7 @@ fixPoint g a0 b = do
       let alast = g aprev bfirst
       r (p a) (FxP FixPoint (b, bfirst, aprev, alast)) bi
     goDR ::
-         (P.Ord a,Trace Noop a)
+         (P.Ord a,Trace Noop a, Core a)
       => (D a -> D a -> D a)
       -> D a
       -> P.Int
@@ -189,7 +232,10 @@ fixPoint g a0 b = do
       let ni = i P.+ 1
       in if ni P.>= m
            then drFin g a bi bfirst b
-           else let aa = g a b
-                in if abs (aa - a) P.<= e
+           else do
+                let aa = g a b
+                d <- aa - a
+                ad <- abs d
+                if ad P.<= e
                      then drFin g a bi bfirst b
                      else goDR g e m ni aa b bi bfirst

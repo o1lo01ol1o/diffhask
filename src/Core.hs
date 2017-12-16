@@ -138,6 +138,8 @@ class Core a where
   (+) :: D a -> D a -> Computation a (D a)
   (-) :: D a -> D a -> Computation a (D a)
   (*) :: D a -> D a -> Computation a (D a)
+  abs :: D a -> Computation a (D a)
+  signum :: D a -> Computation a (D a)
   zero :: D a
   one :: D a
 
@@ -221,16 +223,13 @@ monOp' :: (Trace op a, Computation a ~ m) =>
 monOp' _ a ff fd df r_ =
   case a of
     D ap -> return . D $ ff ap
-    DF ap at ai ->
-      let cp = fd ap
-      in return $ DF cp (df cp ap at) ai
-    DR ap _ ai _ ->
-      let cp = fd ap
-      in r cp (r_ a) ai
-
-
-
-
+    DF ap at ai -> do
+      cp <- fd ap
+      cdf <- df cp ap at
+      return $ DF cp cdf ai
+    DR ap _ ai _ ->do
+      cp <- fd ap
+      r cp (r_ a) ai
     
 monOp :: (MonOp op a, (Trace op a)) => op -> D a -> Computation a (D a)
 monOp op a =
@@ -257,48 +256,69 @@ binOp' _ a b ff fd df_da df_db df_dab r_d_d r_d_c r_c_d = do
     D ap ->
       case b of
         D bp -> return . D $ ff ap bp
-        DF bp bt bi ->
-          let cp = fd a bp
-          in return $ DF cp (df_db cp bp bt) bi
-        DR bp _ bi _ -> r (fd a bp) (r_c_d a b) bi
+        DF bp bt bi -> do
+          cp <- fd a bp
+          cdf <- df_db cp bp bt
+          return $ DF cp cdf bi
+        DR bp _ bi _ -> do
+          cfd <- fd a bp
+          r (cfd) (r_c_d a b) bi
     DF ap at ai ->
       case b of
-        D _ ->
-          let cp = fd ap b
-          in return $ DF cp (df_da cp ap at) ai
+        D _ -> do
+          cp <- fd ap b
+          cdf <- df_da cp ap at
+          return $ DF cp (cdf) ai
         DF bp bt bi ->
           case compare ai bi of
-            EQ ->
-              let cp = fd ap bp
-              in return $ DF cp (df_dab cp ap at bp bt) ai
-            LT ->
-              let cp = fd a bp
-              in return $ DF cp (df_db cp bp bt) bi
-            GT ->
-              let cp = fd ap b
-              in return $ DF cp (df_da cp ap at) ai
+            EQ -> do
+              cp <- fd ap bp
+              cdf <- df_dab cp ap at bp bt
+              return $ DF cp (cdf) ai
+            LT -> do
+              cp <- fd a bp
+              cdf <- df_db cp bp bt
+              return $ DF cp (cdf) bi
+            GT -> do
+              cp <- fd ap b
+              cdf <- df_da cp ap at
+              return $ DF cp (cdf) ai
         DR bp _ bi _ ->
           case compare ai bi of
-            LT -> r (fd a bp) (r_c_d a b) bi
-            GT ->
-              let cp = fd ap b
-              in return $ DF cp (df_da cp ap at) ai
+            LT -> do
+              fdb <- fd a bp
+              r (fdb) (r_c_d a b) bi
+            GT -> do
+              cp <- fd ap b
+              cdf <- df_da cp ap at
+              return $ DF cp (cdf) ai
             EQ -> error "Forward and reverse AD cannot run on the same level."
     DR ap _ ai _ ->
       case b of
-        D _ -> r (fd ap b) (r_d_c a b) ai
+        D _ -> do
+          fda <- fd ap b
+          r (fda) (r_d_c a b) ai
         DF bp bt bi ->
           case compare ai bi of
             EQ -> error "Forward and reverse AD cannot run on the same level."
-            LT ->
-              let cp = fd a bp
-              in return $ DF cp (df_db cp bp bt) bi
-            GT -> r (fd ap b) (r_d_c a b) ai
+            LT -> do
+              cp <- fd a bp
+              cdf <- df_db cp bp bt
+              return $ DF cp (cdf) bi
+            GT -> do
+              fdb <- fd ap b
+              r (fdb) (r_d_c a b) ai
         DR bp _ bi _ ->
           case compare ai bi of
-            EQ -> r (fd ap bp) (r_d_d a b) ai
-            LT -> r (fd a bp) (r_c_d a b) bi
-            GT -> r (fd ap b) (r_d_c a b) ai
+            EQ -> do
+              fdap <- fd ap bp
+              r (fdap) (r_d_d a b) ai
+            LT -> do
+              fdab <- fd a bp
+              r (fdab) (r_c_d a b) bi
+            GT -> do
+              fdab <- fd ap b
+              r (fdab) (r_d_c a b) ai
 
 
 
@@ -340,7 +360,7 @@ class BinOp op a where
     -> (D a)
     -> (D a)
     -> (D a)
-    -> (D a)
+    -> m (D a)
 
 eval :: (Core a) => Delta a -> Computation a (D a)
 eval dl =
@@ -476,26 +496,27 @@ computeAdjoints d = do
   return $ st ^. adjoints
 {-# INLINE diff' #-}
 
-diff' :: (Core a) => (D a -> D a) -> D a -> Computation a (D a, Tangent a)
+diff' :: (Core a) => (D a ->  Computation a (D a)) -> D a -> Computation a (D a, Tangent a)
 diff' f x = do
   n <- getNextTag
-  return . primalTanget . f $ mkForward n one x
+  fout <- f $ mkForward n one x
+  return $ primalTanget fout
 {-# INLINE diff #-}
 
-diff :: (Core a) => (D a -> D a) -> D a -> Computation a (Tangent a)
+diff :: (Core a) => (D a -> Computation a (D a)) -> D a -> Computation a (Tangent a)
 diff f x = 
   snd <$> diff' f x
   
 {-# INLINE diffn #-}
-diffn :: (Core a) => Int -> (D a -> D a) -> D a -> Computation a (Tangent a)
+diffn :: (Core a) => Int -> (D a -> Computation a (D a)) -> D a -> Computation a (Tangent a)
 diffn n f x =
   if n < 0
     then error "Cannot get the nth derivitive when n is negative!"
     else if n == 0
-           then return $ f x
+           then f x
            else go n f x
   where
-    go :: (Core a) => Int -> (D a -> D a) -> D a -> Computation a (Tangent a)
+    go :: (Core a) => Int -> (D a -> Computation a (D a)) -> D a -> Computation a (Tangent a)
     go n f =
       case n of
         0 -> diff f
@@ -503,22 +524,22 @@ diffn n f x =
 
 {-# INLINE diffn' #-}
 diffn'
-  :: (Core a) => Int -> (D a -> D a) -> D a -> Computation a (D a, (Tangent a))
+  :: (Core a) => Int -> (D a -> Computation a (D a)) -> D a -> Computation a (D a, (Tangent a))
 diffn' n f x = do
-  it <- return $ f x
+  it <- f x
   again <- diffn n f x
   return (it, again)
   
 {-# INLINE grad' #-}
 grad' ::
      (Trace Noop a, Core a) =>
-  (D a -> (D a))
+  (D a -> Computation a (D a))
   -> D a
   -> Computation a (D a, (D a))
 grad' f x = do
   ntg <- getNextTag
   xa <- mkReverse ntg x
-  let z = f xa
+  z <- f xa
   computeAdjoints' z
   adj <- adjoint xa
   return (p xa, adj)
@@ -526,7 +547,7 @@ grad' f x = do
 {-# INLINE grad #-}
 grad ::
      (Trace Noop a, Core a) =>
-   (D a -> (D a))
+   (D a -> Computation a (D a))
   -> D a
   -> Computation a (D a)
 grad f x = do
@@ -535,10 +556,11 @@ grad f x = do
 
 -- Original value and Jacobian product of `f`, at point `x`, along `v`. Forward AD.
 jacobian' :: (Core a) =>
-     (D a -> D a) -> Tangent a -> Primal a -> Computation a (D a, Tangent a)
+     (D a -> Computation a (D a)) -> Tangent a -> Primal a -> Computation a (D a, Tangent a)
 jacobian' f x v = do
   ntg <- getNextTag
-  return . primalTanget . f $ mkForward ntg v x
+  fout <- f $ mkForward ntg v x
+  return $ primalTanget fout
 
-jacobian :: (Core a) => (D a -> D a) -> Tangent a -> Primal a -> Computation a (Tangent a)
+jacobian :: (Core a) => (D a -> Computation a (D a)) -> Tangent a -> Primal a -> Computation a (Tangent a)
 jacobian f x v = snd <$> jacobian' f x v

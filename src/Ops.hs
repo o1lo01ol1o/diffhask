@@ -4,6 +4,10 @@ data Noop = Noop
 
 data Add = Add
 
+data Abs = Abs
+
+data Sign = Sign
+
 data Subtract = Subtract
 
 data Negate = Negate
