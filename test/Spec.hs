@@ -10,5 +10,5 @@ import Test.Tasty.QuickCheck()
 main :: IO ()
 main = do
   putStrLn "Num DocTest"
-  doctest ["src/Num.hs"]
+  doctest ["src/Core.hs"]
   -- defaultMain tests
