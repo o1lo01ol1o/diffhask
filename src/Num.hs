@@ -13,13 +13,14 @@ import qualified Data.Map                   as M (Map, empty, insert, lookup,
                                                   updateLookupWithKey)
 import           Lens.Micro                 ((%~), (&), (.~), (^.))
 import qualified Prelude as P
-import Prelude (pure)
+import Prelude (pure, Float, Double, ($))
 
 -- $setup
 -- >>> :set -XDataKinds
 -- >>> :set -XOverloadedLists
 -- >>> :set -XTypeFamilies
 -- >>> :set -XFlexibleContexts
+-- >>> let a = D 2.0 :: D Float
 
 
 data FixPoint = FixPoint
@@ -69,7 +70,12 @@ instance (P.Ord a, WhatICanWorkWith a, MonCore (D a) a) => Trace FixPoint a wher
   pushEl (FxP _ (b, bfirst, aprev, alast)) = fpPush b bfirst aprev alast
   resetEl (FxP _ (b, bf, ap, al)) = P.pure [b]
 
-fixPoint :: (P.Ord a, Trace Noop a, WhatICanWorkWith a, MonCore (D a) a) =>(D a -> D a -> D a) -> D a -> D a -> Computation a (D a)
+
+-- | FixedPoint
+-- >>> let g a b = (a + b / a) / (D 2.0 :: D Float)
+-- >>> compute $ diff' (fixPoint g (D 1.2)) (D 25.0 :: D Float) 
+-- (D 1.0, D 5.0), (D 1.0, D 0.1)
+fixPoint :: (P.Ord a, Trace Noop a, WhatICanWorkWith a, MonCore (D a) a) =>(D a -> D a -> Computation a (D a)) -> D a -> D a -> Computation a (D a)
 fixPoint g a0 b = do
   eps <- gets (\st -> st ^. fpEps)
   mxitr <- gets (\st -> st ^. maxFpIter)
@@ -80,7 +86,7 @@ fixPoint g a0 b = do
   where
     goD ::
          (P.Ord a, WhatICanWorkWith a, MonCore (D a) a)
-      => (D a -> D a -> D a)
+      => (D a -> D a -> Computation a (D a))
       -> D a
       -> P.Int
       -> P.Int
@@ -92,7 +98,7 @@ fixPoint g a0 b = do
       in if ni P.>= m
            then pure a
            else do
-                let aa = g a b
+                aa <- g a b
                 d <- aa - a
                 ad <- abs d
                 if ad P.<= e
@@ -100,7 +106,7 @@ fixPoint g a0 b = do
                      else goD g e m ni aa b
     goDF ::
          (P.Ord a, WhatICanWorkWith a, MonCore (D a) a)
-      => (D a -> D a -> D a)
+      => (D a -> D a -> Computation a (D a))
       -> D a
       -> P.Int
       -> P.Int
@@ -115,10 +121,11 @@ fixPoint g a0 b = do
                 cta <- t a
                 pure P.$ DF (p a) (cta) bi
            else do
-                let aa = g a b
+                aa <- g a b
                 ps <- ( p aa) - (p a)
                 arg <- abs (ps)
-                td <- t aa - t a
+                cta <- t aa
+                td <- cta - t a
                 if (arg P.<= e)  P.&& (td P.<= e)
                      then do
                      cta <- t a
@@ -126,7 +133,7 @@ fixPoint g a0 b = do
                      else goDF g e m ni aa b bi
     drFin ::
          ( Trace Noop a, P.Ord a, WhatICanWorkWith a, MonCore (D a) a)
-      => (D a -> D a -> D a)
+      => (D a -> D a -> Computation a (D a))
       -> D a
       -> Tag
       -> D a
@@ -134,11 +141,11 @@ fixPoint g a0 b = do
       -> Computation a (D a)
     drFin g a bi bfirst b = do
       aprev <- r (p a) (N Noop) bi
-      let alast = g aprev bfirst
+      alast <- g aprev bfirst
       r (p a) (FxP FixPoint (b, bfirst, aprev, alast)) bi
     goDR ::
          (P.Ord a,Trace Noop a, WhatICanWorkWith a, MonCore (D a) a)
-      => (D a -> D a -> D a)
+      => (D a -> D a -> Computation a (D a))
       -> D a
       -> P.Int
       -> P.Int
@@ -152,7 +159,7 @@ fixPoint g a0 b = do
       in if ni P.>= m
            then drFin g a bi bfirst b
            else do
-                let aa = g a b
+                aa <- g a b
                 d <- aa - a
                 ad <- abs d
                 if ad P.<= e
