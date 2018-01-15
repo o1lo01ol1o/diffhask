@@ -15,6 +15,8 @@ Port of [DiffSharp](https://github.com/DiffSharp/DiffSharp) to Haskell; currentl
 
 
 
+Example usage:
+
 ```haskell
 let g a b = (a + b / a) / (D 2.0 :: D Float)
 compute $ diff' (fixPoint g (D 1.2)) (D 25.0 :: D Float) 
