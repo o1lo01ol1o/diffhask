@@ -1,19 +1,23 @@
 {-# LANGUAGE FlexibleInstances      #-}
+{-# LANGUAGE FlexibleContexts      #-}
+{-# LANGUAGE UndecidableInstances      #-}
+{-# LANGUAGE TypeFamilies      #-}
 {-# LANGUAGE FunctionalDependencies #-}
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE MultiParamTypeClasses  #-}
 {-# OPTIONS_GHC -Wall #-}
 
 -- | Element-by-element operation for 'Representable's
-module NumHask.Algebra.Basis
+module Internal.NumHask.Algebra.Basis
   ( AdditiveBasis(..)
   , AdditiveGroupBasis(..)
   , MultiplicativeBasis(..)
   , MultiplicativeGroupBasis(..)
   ) where
 
-import           Core                           (Computation, D (..))
-import           NumHask.Algebra.Additive
-import           NumHask.Algebra.Multiplicative
+import           Internal.NumHask.Algebra.Additive
+import           Internal.NumHask.Algebra.Multiplicative
+import Internal.Internal
 
 -- | element by element addition
 --
@@ -52,3 +56,10 @@ class (MultiplicativeGroup a b t) =>
       MultiplicativeGroupBasis a b m t | a b -> t, a -> t, b -> t where
   infixl 7 ./.
   (./.) :: a -> b -> Computation t (D (m t))
+
+-- data M
+
+-- instance (AdditiveBasis (D (r a)) (D (r a)) r a) => CDelta (D (r a)) a where
+--   data Delta a M = M (D (r a))
+
+

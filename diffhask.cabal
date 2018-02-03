@@ -17,8 +17,25 @@ tested-with:         GHC == 8.2.2
 library
   hs-source-dirs:      src
   exposed-modules:     Core, Num
+  other-modules:       Internal.Internal
+                     , Internal.NumHask.Algebra
+                     , Internal.NumHask.Algebra.Additive
+                     , Internal.NumHask.Algebra.Basis
+                     , Internal.NumHask.Algebra.Distribution
+                     , Internal.NumHask.Algebra.Field
+                     , Internal.NumHask.Algebra.Multiplicative
+                     , Internal.NumHask.Algebra.Ring
+                     , Internal.NumHask.Algebra.Magma
+                     , Internal.NumHask.Algebra.Module
+                     , Internal.NumHask.Algebra.Metric
+                     , Internal.NumHask.Algebra.Singleton
+                     , Internal.NumHask.Prelude
+
+
+
+
   ghc-options:         -Wall -fllvm -O2
-  default-extensions: NegativeLiterals OverloadedStrings UnicodeSyntax
+  default-extensions: NegativeLiterals OverloadedStrings UnicodeSyntax ScopedTypeVariables
   build-depends:       base
                      , value-supply
                      , containers
@@ -28,6 +45,10 @@ library
                      , microlens-th
                      , vector
                      , protolude
+                     , dependent-sum
+
+
+
 
   default-language:    Haskell2010
 
@@ -35,10 +56,11 @@ test-suite diffhask-test
   type:                exitcode-stdio-1.0
   hs-source-dirs:      test
   main-is:             Spec.hs
-  default-extensions: NegativeLiterals OverloadedStrings UnicodeSyntax
+  default-extensions: NegativeLiterals OverloadedStrings UnicodeSyntax ScopedTypeVariables
   build-depends:       base
                      , diffhask
-                       , text
+                     , text
+
                      , QuickCheck
                      , doctest
                      , tasty

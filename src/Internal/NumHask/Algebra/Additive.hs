@@ -1,13 +1,17 @@
 {-# OPTIONS_GHC -Wall #-}
+{-# LANGUAGE DataKinds              #-}
 {-# LANGUAGE FlexibleContexts       #-}
 {-# LANGUAGE FlexibleInstances      #-}
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE MultiParamTypeClasses  #-}
 {-# LANGUAGE NoImplicitPrelude      #-}
+{-# LANGUAGE Rank2Types             #-}
+{-# LANGUAGE TypeFamilies           #-}
+{-# LANGUAGE UndecidableInstances   #-}
 
 -- {-# LANGUAGE AllowAmbiguousTypes #-}
 -- | A magma heirarchy for addition. The basic magma structure is repeated and prefixed with 'Additive-'.
-module NumHask.Algebra.Additive
+module Internal.NumHask.Algebra.Additive
   ( AdditiveMagma(..)
   , AdditiveUnital(..)
   , AdditiveAssociative
@@ -19,10 +23,21 @@ module NumHask.Algebra.Additive
   , AdditiveRightCancellative(..)
   , AdditiveLeftCancellative(..)
   , AdditiveGroup(..)
+  , Trace(..)
+  , Delta(..)
   ) where
-import           Core      hiding (negate, signum, zero, (*), (+), (-), (/))
-import           Protolude (Bool (..), Double, Float, Int, Integer)
+import           Internal.Internal
+import           Protolude (Bool (..), Double, Float, Int, Integer, pure, ($))
 import qualified Protolude as P
+
+-- $setup
+-- >>> :set -XDataKinds
+-- >>> :set -XOverloadedLists
+-- >>> :set -XTypeFamilies
+-- >>> :set -XFlexibleContexts
+-- >>> :set -XNoImplicitPrelude
+-- >>> let b = D 2 :: (D Float)
+-- >>> let a = D 3 :: (D Float)
 
 -- | 'plus' is used as the operator for the additive magma to distinguish from '+' which, by convention, implies commutativity
 --
@@ -71,6 +86,30 @@ instance AdditiveMagma (D Double) (Computation Double (D Double)) Double where
 instance AdditiveMagma (D Double) (D Double) Double where
   plus = binOp Add
 
+-- | Addition
+-- >>> compute $ diff' (\x -> x + a) a
+-- (D 6.0,D 1.0)
+instance (P.Num a) => FFBin Add a where
+  {-# INLINE ff_bin #-}
+  ff_bin _ a b = b P.+ a
+
+instance DfDaBin Add (D a) a where
+  {-# INLINE df_da #-}
+  df_da _ _ _ _ at = pure at
+
+instance DfDbBin Add (D a) a where
+  {-# INLINE df_db #-}
+  df_db _ _ _ _ bt = pure bt
+
+instance (P.Num a) => BinOp Add (D a) (D a) a where
+  {-# INLINE fd_bin #-}
+  fd_bin _ a b = binOp Add a b
+  {-# INLINE df_dab #-}
+  df_dab _ _ _ _ _ at _ bt = binOp Add at bt
+
+instance Trace Add a where
+  pushEl (B _ a b) dA = pure [(X dA, a), (X dA, b), (X dA, a), (X dA, b)]
+  resetEl (B _ a b) = pure [a, b, a, b]
 
 
 -- | Unital magma for addition.
@@ -97,47 +136,32 @@ instance AdditiveUnital (Computation Float (D Float)) Float where
 -- | Associative magma for addition.
 --
 -- > (a `plus` b) `plus` c == a `plus` (b `plus` c)
-class AdditiveMagma a b t=>
-      AdditiveAssociative a b t | a b -> t, a -> t, b -> t
+class AdditiveMagma a a t=>
+      AdditiveAssociative a t |  a -> t
 
-instance AdditiveAssociative (D Double) (D Double) Double
+instance AdditiveAssociative (D Double)  Double
 
-instance AdditiveAssociative (Computation Double (D Double)) (D Double) Double
+instance AdditiveAssociative (Computation Double (D Double)) Double
 
-instance AdditiveAssociative (D Double) (Computation Double (D Double)) Double
+instance AdditiveAssociative (D Float) Float
 
-instance AdditiveAssociative (D Float) (D Float) Float
+instance AdditiveAssociative (Computation Float (D Float)) Float
 
-instance AdditiveAssociative (D Float) (Computation Float (D Float)) Float
-
-instance AdditiveAssociative (Computation Float (D Float)) (D Float) Float
-
-instance AdditiveAssociative (Computation Double (D Double)) (Computation Double (D Double)) Double
-
-instance AdditiveAssociative (Computation Float (D Float)) (Computation Float (D Float)) Float
 
 
 -- | Commutative magma for addition.
 --
 -- > a `plus` b == b `plus` a
-class AdditiveMagma a b t =>
-      AdditiveCommutative a b t | a b -> t, a -> t, b -> t
+class AdditiveMagma a a t =>
+      AdditiveCommutative a t | a -> t
 
-instance AdditiveCommutative (D Double) (D Double) Double
+instance AdditiveCommutative (D Double)  Double
 
-instance AdditiveCommutative (D Float) (D Float) Float
+instance AdditiveCommutative (D Float)  Float
 
-instance AdditiveCommutative (Computation Double (D Double)) (Computation Double (D Double)) Double
+instance AdditiveCommutative (Computation Double (D Double)) Double
 
-instance AdditiveCommutative (D Double) (Computation Double (D Double)) Double
-
-instance AdditiveCommutative (Computation Double (D Double))  (D Double) Double
-
-instance AdditiveCommutative (Computation Float (D Float)) (Computation Float (D Float)) Float
-
-instance AdditiveCommutative (D Float) (Computation Float (D Float)) Float
-
-instance AdditiveCommutative (Computation Float (D Float)) (D Float) Float
+instance AdditiveCommutative (Computation Float (D Float)) Float
 
 
 -- | Invertible magma for addition.
@@ -165,6 +189,20 @@ instance AdditiveInvertible  (D Double) Double where
 instance AdditiveInvertible   (D Float) Float where
   negate = monOp Negate
 
+instance (P.Num a, AdditiveInvertible (D a) a) => MonOp Negate a where
+  {-# INLINE ff #-}
+  ff _ a = P.negate a
+  {-# INLINE fd #-}
+  fd _ a = monOp Negate a
+  {-# INLINE df #-}
+  df _ _ _ at = monOp Negate at
+
+instance (AdditiveInvertible (D a) a) => Trace Negate a where
+  pushEl (U _ a) dA = do
+    cda <- negate dA
+    pure [(X cda, a)]
+  resetEl (U _ a) = pure [a]
+
 -- | Idempotent magma for addition.
 --
 -- > a `plus` a == a
@@ -189,10 +227,13 @@ sum = P.foldr (+) zero
 -- > a + zero == a
 -- > (a + b) + c == a + (b + c)
 -- > a + b == b + a
-class ( AdditiveCommutative a b t
+class ( AdditiveCommutative a t
+      , AdditiveCommutative b t
       , AdditiveUnital a t
       , AdditiveUnital b t
-      , AdditiveAssociative a b t
+      , AdditiveAssociative a t
+      , AdditiveAssociative b t
+      , AdditiveMagma a b t
       ) =>
       Additive a b t | a b -> t, a -> t, b -> t where
   infixl 6 +
@@ -221,8 +262,8 @@ instance Additive (Computation Float (D Float)) (Computation Float (D Float)) Fl
 class ( AdditiveMagma a b t
       , AdditiveMagma (Computation t (D t)) a t
       , AdditiveUnital b t
-      , AdditiveAssociative a b t
-      , AdditiveAssociative b a t
+      , AdditiveAssociative a t
+      , AdditiveAssociative b t
       , AdditiveInvertible b t
       ) =>
       AdditiveLeftCancellative a b t | a b -> t, a -> t, b -> t where
@@ -235,7 +276,7 @@ class ( AdditiveMagma a b t
 -- > a `plus` negate a = zero
 class ( AdditiveUnital b t
       , AdditiveMagma a (Computation t (D t)) t
-      , AdditiveAssociative a b t
+      , AdditiveAssociative a t
       , AdditiveInvertible b t
       ) =>
       AdditiveRightCancellative a b t | a b -> t, a -> t, b -> t where
@@ -275,3 +316,16 @@ instance AdditiveGroup (Computation Float (D Float)) (D Float) Float
 instance AdditiveGroup (Computation Double (D Double)) (Computation Double (D Double)) Double
 
 instance AdditiveGroup (Computation Float (D Float)) (Computation Float (D Float)) Float
+
+-- | Subtraction
+-- >>> compute $ diff' (\x -> x - a) a
+-- (D 0.0,D 1.0)
+
+-- data X
+
+-- instance (Additive (D a) (D a) a) => CDelta (D a) a where
+--   data Delta a X = X (D a)
+-- instance (Additive (D a) (D a) a) => AdditiveDelta 'True 'True a (D a) (D a) where
+--   addDeltas (X a) (X b) = a + b
+
+

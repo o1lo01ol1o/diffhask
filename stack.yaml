@@ -2,8 +2,6 @@ flags: {}
 packages:
 - .
 extra-deps:
-- colour-2.3.3
-- criterion-1.2.4.0
 - tasty-0.12
 - value-supply-0.6
-resolver: lts-10.2
+resolver: lts-10.4

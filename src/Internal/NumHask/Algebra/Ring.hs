@@ -6,7 +6,7 @@
 {-# LANGUAGE NoImplicitPrelude      #-}
 
 -- | Ring classes. A distinguishment is made between Rings and Commutative Rings.
-module NumHask.Algebra.Ring
+module Internal.NumHask.Algebra.Ring
   ( Semiring
   , Ring
   , CRing
@@ -14,10 +14,10 @@ module NumHask.Algebra.Ring
   , KleeneAlgebra
   ) where
 
-import           Core                           (Computation, D (..))
-import           NumHask.Algebra.Additive
-import           NumHask.Algebra.Distribution
-import           NumHask.Algebra.Multiplicative
+import Internal.Internal
+import           Internal.NumHask.Algebra.Additive
+import           Internal.NumHask.Algebra.Distribution
+import           Internal.NumHask.Algebra.Multiplicative
 import           Protolude                      (Double, Float)
 
 -- | Semiring
@@ -107,15 +107,17 @@ instance CRing (Computation Float (D Float)) (Computation Float (D Float)) Float
 -- > star a = one + a `times` star a
 --
 class ( Semiring a a t
-      --, MultiplicativeUnital a t
-      --, MultiplicativeMagma a (Computation t (D t)) t
-      --, Additive a (Computation t (D t)) t
+      , MultiplicativeUnital a t
+      , MultiplicativeUnital (D a) t
+      , MultiplicativeMagma a (Computation t (D t)) t
+      , Additive a (Computation t (D t)) t
+      , Additive (D a) (Computation t (D t)) t
       ) =>
       StarSemiring a t | a -> t where
-  -- star :: a -> Computation t (D t)
-  -- star a = one + plus' a
-  -- plus' :: a -> Computation t (D t)
-  -- plus' a = a `times` star a
+  star :: a -> Computation t (D t)
+  star a = (one :: D a) + plus' a
+  plus' :: a -> Computation t (D t)
+  plus' a = a `times` star a
 
 -- | KleeneAlgebra
 --

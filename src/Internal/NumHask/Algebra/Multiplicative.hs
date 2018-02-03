@@ -5,9 +5,10 @@
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE MultiParamTypeClasses  #-}
 {-# LANGUAGE NoImplicitPrelude      #-}
+{-# LANGUAGE UndecidableInstances      #-}
 
 -- | A magma heirarchy for multiplication. The basic magma structure is repeated and prefixed with 'Multiplicative-'.
-module NumHask.Algebra.Multiplicative
+module Internal.NumHask.Algebra.Multiplicative
   ( MultiplicativeMagma(..)
   , MultiplicativeUnital(..)
   , MultiplicativeAssociative
@@ -21,12 +22,11 @@ module NumHask.Algebra.Multiplicative
   ) where
 
 
-import           Core                     hiding (negate, one, signum, zero,
-                                           (*), (+), (-), (/))
-import           NumHask.Algebra.Additive
+import           Internal.NumHask.Algebra.Additive
 import           Protolude                (Bool (..), Double, Float, Int,
-                                           Integer)
+                                           Integer, pure, ($))
 import qualified Protolude                as P
+import Internal.Internal
 
 -- | 'times' is used as the operator for the multiplicative magam to distinguish from '*' which, by convention, implies commutativity
 --
@@ -74,6 +74,41 @@ instance MultiplicativeMagma (D Double) (Computation Double (D Double)) Double w
 
 instance MultiplicativeMagma (D Double) (D Double) Double where
   times = binOp Multiply
+
+-- | Multiplication
+-- >>> compute $ diff' (\x -> x * a) a
+-- (D 9.0,D 3.0)
+instance (P.Num a) => FFBin Multiply a where
+  {-# INLINE ff_bin #-}
+  ff_bin _ a b =  b P.* a
+
+instance (P.Num a, Multiplicative (D a) (D a) a) => DfDaBin Multiply (D a) a where
+  {-# INLINE df_da #-}
+  df_da _ b _ _ at = binOp Multiply at b
+
+instance (P.Num a, Multiplicative (D a) (D a) a) => DfDbBin Multiply (D a) a where
+  {-# INLINE df_db #-}
+  df_db _ a _ _ bt = binOp Multiply bt a
+
+instance (P.Num a, Multiplicative (D a) (D a) a) => BinOp Multiply (D a) (D a) a where
+  {-# INLINE fd_bin #-}
+  fd_bin _ a b =  binOp Multiply a b
+  {-# INLINE df_dab #-}
+  df_dab _ _ _ _ ap at bp bt = do
+    a <- (binOp Multiply at bp)
+    b <- (binOp Multiply ap bt)
+    binOp Add a b
+
+instance (Multiplicative (D a) (D a) a) => Trace Multiply a where
+  pushEl (B _ a b) dA = do
+    cdA <- pure dA
+    opa <- cdA * p b
+    opb <- cdA * p a
+    arga <- cdA * b
+    argb <- cdA * a
+    pure [(X opa, a), (X opb, b), (X arga, a), (X argb, b)]
+  resetEl (B _ a b) = pure [a, b, a, b]
+
 
 -- | Unital magma for multiplication.
 --
@@ -149,6 +184,72 @@ instance MultiplicativeInvertible (Computation Float (D Float)) Float where
   recip a = do
     aa <- a
     binOp Divide one aa
+
+instance (P.Num a, P.Fractional a) => FFBin Divide a where
+  {-# INLINE ff_bin #-}
+  ff_bin _ a b = b P./ a
+
+instance ( P.Num a
+         , P.Fractional a
+         , Multiplicative (D a) (D a) a
+         , AdditiveGroup (D a) (D a) a
+         , MultiplicativeGroup (D a) (D a) a
+         , MultiplicativeGroup (Computation a (D a)) (D a) a
+         , Multiplicative (D a) (Computation a (D a)) a
+         ) =>
+         DfDaBin Divide (D a) a where
+  {-# INLINE df_da #-}
+  df_da _ b _ _ at = binOp Divide at b
+
+instance ( P.Num a
+         , P.Fractional a
+         , Multiplicative (D a) (D a) a
+         , AdditiveGroup (D a) (D a) a
+         , MultiplicativeGroup (D a) (D a) a
+         , MultiplicativeGroup (Computation a (D a)) (D a) a
+         , Multiplicative (D a) (Computation a (D a)) a
+         ) =>
+         DfDbBin Divide (D a) a where
+  {-# INLINE df_db #-}
+  df_db _ a cp bp bt = do
+    cbt <- (monOp Negate bt)
+    ccpbp <- (binOp Divide cp bp)
+    binOp Divide cbt ccpbp
+
+instance ( P.Num a
+         , P.Fractional a
+         , Multiplicative (D a) (D a) a
+         , AdditiveGroup (D a) (D a) a
+         , MultiplicativeGroup (D a) (D a) a
+         , MultiplicativeGroup (Computation a (D a)) (D a) a
+         , Multiplicative (D a) (Computation a (D a)) a
+         ) =>
+         BinOp Divide (D a) (D a) a where
+  {-# INLINE fd_bin #-}
+  fd_bin _ a b = binOp Divide a b
+  {-# INLINE df_dab #-}
+  df_dab _ _ _ cp ap at bp bt = do
+    catbt <- at - bt
+    ccp <- binOp Multiply catbt cp
+    binOp Divide (ccp) bp 
+
+instance ( P.Num a
+         , P.Fractional a
+         , Multiplicative (D a) (D a) a
+         , AdditiveGroup (D a) (D a) a
+         , MultiplicativeGroup (D a) (D a) a
+         , MultiplicativeGroup (Computation a (D a)) (D a) a
+         , Multiplicative (D a) (Computation a (D a)) a
+         ) =>
+         Trace Divide a where
+  pushEl (B _ a b) dA = do
+    cdA <- pure dA
+    opa <- cdA / p b
+    opb <- cdA * (((negate (p a)) / p b) * p b)
+    arga <- cdA * b
+    argb <- cdA * a
+    pure [(X opa, a), (X opb, b), (X arga, a), (X argb, b)]
+  resetEl (B _ a b) = pure [a, b, a, b]
 
 -- | Idempotent magma for multiplication.
 --

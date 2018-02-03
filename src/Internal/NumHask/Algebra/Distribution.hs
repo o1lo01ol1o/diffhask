@@ -4,14 +4,14 @@
 {-# LANGUAGE MultiParamTypeClasses  #-}
 {-# LANGUAGE NoImplicitPrelude      #-}
 -- | 'Distribution' avoids a name clash with 'Data.Distributive'
-module NumHask.Algebra.Distribution
+module Internal.NumHask.Algebra.Distribution
   ( Distribution
   ) where
 
-import           Core                           (Computation, D (..))
-import           NumHask.Algebra.Additive
-import           NumHask.Algebra.Multiplicative
+import           Internal.NumHask.Algebra.Additive
+import           Internal.NumHask.Algebra.Multiplicative
 import           Protolude                      (Double, Float)
+import Internal.Internal
 
 -- | Distribution (and annihilation) laws
 --
