@@ -73,7 +73,7 @@ instance Signed (Computation Float (D Float)) Float  where
 -- | Abs
 --  compute $ diff' abs a
 -- (D 3.0, D 1.0)
-instance ( P.Num a, Signed (D a) a, AdditiveUnital (D a) a, AdditiveInvertible (D a) a, P.Ord a, Multiplicative (D a) (Computation a (D a)) a
+instance ( ScalarInABox a, Signed (D a) a, AdditiveUnital (D a) a, AdditiveInvertible (D a) a, P.Ord a, Multiplicative (D a) (Computation a (D a)) a
          ) =>
          MonOp Abs a where
   {-# INLINE ff #-}
@@ -87,12 +87,12 @@ instance ( P.Num a, Signed (D a) a, AdditiveUnital (D a) a, AdditiveInvertible (
   df _ _ ap at = at * sign ap
 
 
-instance (Signed (D a) a, Multiplicative (D a) (D a) a) => Trace Abs a where
+instance (Signed (D a) a, ScalarInABox a, Multiplicative (D a) (D a) a) => Trace Abs a where
   pushEl (U _ a) dA = do
     sp <-  sign (p a)
     dl <- dA * sp
-    P.pure [(X dl, a)]
-  resetEl (U _ a ) = P.pure [a]
+    P.pure [(X dl, X a)]
+  resetEl (U _ a ) = P.pure [X a]
 
 -- | Like Signed, except the codomain can be different to the domain.
 class Normed a t | a -> t where

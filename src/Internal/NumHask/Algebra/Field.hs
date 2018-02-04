@@ -205,11 +205,11 @@ instance ( P.Floating a
   df _ cp ap at =
     at / (ap * (log10Val))
 
-instance ( MultiplicativeGroup (D a) (D a) a) => Trace Exp a where
+instance (ScalarInABox a, MultiplicativeGroup (D a) (D a) a) => Trace Exp a where
   pushEl (U _ a) dA = do
     cda <- (dA * (p a))
-    P.pure [(X cda, a)]
-  resetEl (U _ a ) = pure [a]
+    P.pure [(X cda, X a)]
+  resetEl (U _ a ) = pure [X a]
 
 
 instance ( P.Floating a
@@ -228,11 +228,11 @@ instance ( P.Floating a
   df _ cp ap at =
     at / ap
 
-instance ( MultiplicativeGroup (D a) (D a) a) => Trace Log a where
+instance (ScalarInABox a, MultiplicativeGroup (D a) (D a) a) => Trace Log a where
   pushEl (U _ a) dA = do
     cda <- (dA / (p a))
-    P.pure [(X cda, a)]
-  resetEl (U _ a ) = pure [a]
+    P.pure [(X cda, X a)]
+  resetEl (U _ a ) = pure [X a]
 
 
 -- TODO: QuotientFields are not differentiable and we lack a RealFrac (D a) instance.  Should just provide one.
@@ -501,7 +501,7 @@ instance TrigField (Computation Double (D Double)) Double where
           (log (z + (one :: D Double)) - log (z - (one :: D Double)))
 
 
-instance ( TrigField (D a) a
+instance (ScalarInABox a, TrigField (D a) a
          , P.Floating a
          , Multiplicative (D a) (Computation a (D a)) a
          , MonOp Cos a
@@ -515,15 +515,15 @@ instance ( TrigField (D a) a
   {-# INLINE df #-}
   df _ _ ap at = at * (monOp Cos ap)
 
-instance (TrigField (D a) a, Multiplicative (D a) (Computation a (D a)) a) =>
+instance (ScalarInABox a, TrigField (D a) a, Multiplicative (D a) (Computation a (D a)) a) =>
          Trace Sin a where
   pushEl (U _ a) dA = do
     d <- dA * (cos (p a))
-    pure [(X d, a)]
-  resetEl (U _ a) = pure [a]
+    pure [(X d, X a)]
+  resetEl (U _ a) = pure [X a]
 
 
-instance ( TrigField (D a) a
+instance (ScalarInABox a, TrigField (D a) a
          , P.Floating a
          , Multiplicative (D a) (Computation a (D a)) a
          , Multiplicative (Computation a (D a)) (Computation a (D a)) a
@@ -538,18 +538,18 @@ instance ( TrigField (D a) a
   {-# INLINE df #-}
   df _ _ ap at = at * (monOp Cos ap)
 
-instance ( AdditiveInvertible (Computation a (D a)) a
+instance (ScalarInABox a, AdditiveInvertible (Computation a (D a)) a
          , TrigField (D a) a
          , Multiplicative (D a) (Computation a (D a)) a
          ) =>
          Trace Cos a where
   pushEl (U _ a) dA = do
     d <- dA * (negate $ sin (p a))
-    pure [(X d, a)]
-  resetEl (U _ a) = pure [a]
+    pure [(X d, X a)]
+  resetEl (U _ a) = pure [X a]
 
 
-instance ( TrigField (D a) a
+instance (ScalarInABox a, TrigField (D a) a
          , P.Floating a
          , Multiplicative (D a) (Computation a (D a)) a
          , Multiplicative (Computation a (D a)) (Computation a (D a)) a
@@ -566,7 +566,7 @@ instance ( TrigField (D a) a
   {-# INLINE df #-}
   df _ _ ap at = at / sqrt ((one :: D a) - ap * ap)
 
-instance ( AdditiveInvertible (Computation a (D a)) a
+instance (ScalarInABox a, AdditiveInvertible (Computation a (D a)) a
          , TrigField (D a) a
          , Multiplicative (D a) (Computation a (D a)) a
          , AdditiveGroup (D a) (Computation a (D a)) a
@@ -576,10 +576,10 @@ instance ( AdditiveInvertible (Computation a (D a)) a
          Trace ASin a where
   pushEl (U _ a) dA = do
     d <- dA / (sqrt ((one :: D a) - (p a * p a)))
-    pure [(X d, a)]
-  resetEl (U _ a) = pure [a]
+    pure [(X d, X a)]
+  resetEl (U _ a) = pure [X a]
 
-instance ( TrigField (D a) a
+instance (ScalarInABox a, TrigField (D a) a
          , P.Floating a
          , Multiplicative (D a) (Computation a (D a)) a
          , Multiplicative (Computation a (D a)) (Computation a (D a)) a
@@ -596,7 +596,7 @@ instance ( TrigField (D a) a
   {-# INLINE df #-}
   df _ _ ap at = negate $ at / sqrt ((one :: D a) - ap * ap)
 
-instance ( AdditiveInvertible (Computation a (D a)) a
+instance (ScalarInABox a, AdditiveInvertible (Computation a (D a)) a
          , TrigField (D a) a
          , Multiplicative (D a) (Computation a (D a)) a
          , AdditiveGroup (D a) (Computation a (D a)) a
@@ -606,11 +606,11 @@ instance ( AdditiveInvertible (Computation a (D a)) a
          Trace ACos a where
   pushEl (U _ a) dA = do
     d <- negate $ dA / (sqrt ((one :: D a) - (p a * p a)))
-    pure [(X d, a)]
-  resetEl (U _ a) = pure [a]
+    pure [(X d, X a)]
+  resetEl (U _ a) = pure [X a]
 
 
-instance ( TrigField (D a) a
+instance (ScalarInABox a, TrigField (D a) a
          , P.Floating a
          , Multiplicative (D a) (Computation a (D a)) a
          , Multiplicative (Computation a (D a)) (Computation a (D a)) a
@@ -627,7 +627,7 @@ instance ( TrigField (D a) a
   {-# INLINE df #-}
   df _ _ ap at = at / sqrt ((one :: D a) + ap * ap)
 
-instance ( AdditiveInvertible (Computation a (D a)) a
+instance (ScalarInABox a, AdditiveInvertible (Computation a (D a)) a
          , TrigField (D a) a
          , Multiplicative (D a) (Computation a (D a)) a
          , AdditiveGroup (D a) (Computation a (D a)) a
@@ -637,10 +637,10 @@ instance ( AdditiveInvertible (Computation a (D a)) a
          Trace ATan a where
   pushEl (U _ a) dA = do
     d <- dA / (sqrt ((one :: D a) + (p a * p a)))
-    pure [(X d, a)]
-  resetEl (U _ a) = pure [a]
+    pure [(X d, X a)]
+  resetEl (U _ a) = pure [X a]
 
-instance ( TrigField (D a) a
+instance (ScalarInABox a, TrigField (D a) a
          , P.Floating a
          , Multiplicative (D a) (Computation a (D a)) a
          , Multiplicative (Computation a (D a)) (Computation a (D a)) a
@@ -657,7 +657,7 @@ instance ( TrigField (D a) a
   {-# INLINE df #-}
   df _ _ ap at = at * (cosh ap)
 
-instance ( AdditiveInvertible (Computation a (D a)) a
+instance (ScalarInABox a, AdditiveInvertible (Computation a (D a)) a
          , TrigField (D a) a
          , Multiplicative (D a) (Computation a (D a)) a
          , AdditiveGroup (D a) (Computation a (D a)) a
@@ -667,10 +667,10 @@ instance ( AdditiveInvertible (Computation a (D a)) a
          Trace SinH a where
   pushEl (U _ a) dA = do
     d <- dA * (cosh $ p a)
-    pure [(X d, a)]
-  resetEl (U _ a) = pure [a]
+    pure [(X d, X a)]
+  resetEl (U _ a) = pure [X a]
 
-instance ( TrigField (D a) a
+instance (ScalarInABox a, TrigField (D a) a
          , P.Floating a
          , Multiplicative (D a) (Computation a (D a)) a
          , Multiplicative (Computation a (D a)) (Computation a (D a)) a
@@ -687,7 +687,7 @@ instance ( TrigField (D a) a
   {-# INLINE df #-}
   df _ _ ap at = at * (sinh ap)
 
-instance ( AdditiveInvertible (Computation a (D a)) a
+instance (ScalarInABox a, AdditiveInvertible (Computation a (D a)) a
          , TrigField (D a) a
          , Multiplicative (D a) (Computation a (D a)) a
          , AdditiveGroup (D a) (Computation a (D a)) a
@@ -697,6 +697,6 @@ instance ( AdditiveInvertible (Computation a (D a)) a
          Trace CosH a where
   pushEl (U _ a) dA = do
     d <- dA * (sinh $ p a)
-    pure [(X d, a)]
-  resetEl (U _ a) = pure [a]
+    pure [(X d, X a)]
+  resetEl (U _ a) = pure [X a]
 

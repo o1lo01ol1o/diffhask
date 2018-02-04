@@ -18,6 +18,7 @@ module Internal.NumHask.Algebra.Module
   , Hilbert(..)
   , type (><)
   , TensorProduct(..)
+  , AdditiveBoxModule(..)
   ) where
 
 import Internal.NumHask.Algebra.Additive

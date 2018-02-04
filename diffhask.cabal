@@ -45,7 +45,10 @@ library
                      , microlens-th
                      , vector
                      , protolude
+                     , dependent-sum-template
                      , dependent-sum
+                     , dependent-map
+
 
 
 

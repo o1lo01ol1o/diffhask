@@ -13,6 +13,7 @@ module Internal.NumHask.Algebra.Basis
   , AdditiveGroupBasis(..)
   , MultiplicativeBasis(..)
   , MultiplicativeGroupBasis(..)
+  , AdditiveBoxBasis(..)
   ) where
 
 import           Internal.NumHask.Algebra.Additive

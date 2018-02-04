@@ -6,7 +6,7 @@
 {-# LANGUAGE MultiParamTypeClasses  #-}
 {-# LANGUAGE NoImplicitPrelude      #-}
 {-# LANGUAGE UndecidableInstances      #-}
-
+{-# LANGUAGE TypeFamilies      #-}
 -- | A magma heirarchy for multiplication. The basic magma structure is repeated and prefixed with 'Multiplicative-'.
 module Internal.NumHask.Algebra.Multiplicative
   ( MultiplicativeMagma(..)
@@ -82,15 +82,15 @@ instance (P.Num a) => FFBin Multiply a where
   {-# INLINE ff_bin #-}
   ff_bin _ a b =  b P.* a
 
-instance (P.Num a, Multiplicative (D a) (D a) a) => DfDaBin Multiply (D a) a where
+instance (ScalarInABox a, Multiplicative (D a) (D a) a) => DfDaBin Multiply (D a) a where
   {-# INLINE df_da #-}
   df_da _ b _ _ at = binOp Multiply at b
 
-instance (P.Num a, Multiplicative (D a) (D a) a) => DfDbBin Multiply (D a) a where
+instance (ScalarInABox a, Multiplicative (D a) (D a) a) => DfDbBin Multiply (D a) a where
   {-# INLINE df_db #-}
   df_db _ a _ _ bt = binOp Multiply bt a
 
-instance (P.Num a, Multiplicative (D a) (D a) a) => BinOp Multiply (D a) (D a) a where
+instance (ScalarInABox a, Multiplicative (D a) (D a) a) => BinOp Multiply (D a) (D a) a where
   {-# INLINE fd_bin #-}
   fd_bin _ a b =  binOp Multiply a b
   {-# INLINE df_dab #-}
@@ -99,15 +99,15 @@ instance (P.Num a, Multiplicative (D a) (D a) a) => BinOp Multiply (D a) (D a) a
     b <- (binOp Multiply ap bt)
     binOp Add a b
 
-instance (Multiplicative (D a) (D a) a) => Trace Multiply a where
+instance (ScalarInABox a, Multiplicative (D a) (D a) a) => Trace Multiply a where
   pushEl (B _ a b) dA = do
     cdA <- pure dA
     opa <- cdA * p b
     opb <- cdA * p a
     arga <- cdA * b
     argb <- cdA * a
-    pure [(X opa, a), (X opb, b), (X arga, a), (X argb, b)]
-  resetEl (B _ a b) = pure [a, b, a, b]
+    pure [(X opa, X a), (X opb, X b), (X arga, X a), (X argb, X b)]
+  resetEl (B _ a b) = pure $ X P.<$> [a, b, a, b]
 
 
 -- | Unital magma for multiplication.
@@ -189,7 +189,7 @@ instance (P.Num a, P.Fractional a) => FFBin Divide a where
   {-# INLINE ff_bin #-}
   ff_bin _ a b = b P./ a
 
-instance ( P.Num a
+instance ( ScalarInABox a
          , P.Fractional a
          , Multiplicative (D a) (D a) a
          , AdditiveGroup (D a) (D a) a
@@ -201,7 +201,7 @@ instance ( P.Num a
   {-# INLINE df_da #-}
   df_da _ b _ _ at = binOp Divide at b
 
-instance ( P.Num a
+instance (ScalarInABox a
          , P.Fractional a
          , Multiplicative (D a) (D a) a
          , AdditiveGroup (D a) (D a) a
@@ -216,7 +216,7 @@ instance ( P.Num a
     ccpbp <- (binOp Divide cp bp)
     binOp Divide cbt ccpbp
 
-instance ( P.Num a
+instance ( ScalarInABox a
          , P.Fractional a
          , Multiplicative (D a) (D a) a
          , AdditiveGroup (D a) (D a) a
@@ -233,7 +233,7 @@ instance ( P.Num a
     ccp <- binOp Multiply catbt cp
     binOp Divide (ccp) bp 
 
-instance ( P.Num a
+instance ( ScalarInABox a
          , P.Fractional a
          , Multiplicative (D a) (D a) a
          , AdditiveGroup (D a) (D a) a
@@ -248,15 +248,14 @@ instance ( P.Num a
     opb <- cdA * (((negate (p a)) / p b) * p b)
     arga <- cdA * b
     argb <- cdA * a
-    pure [(X opa, a), (X opb, b), (X arga, a), (X argb, b)]
-  resetEl (B _ a b) = pure [a, b, a, b]
+    pure [(X opa, X a), (X opb, X b), (X arga, X a), (X argb, X b)]
+  resetEl (B _ a b) = pure $ X P.<$> [a, b, a, b]
 
 -- | Idempotent magma for multiplication.
 --
 -- > a `times` a == a
 class MultiplicativeMagma a a t=>
       MultiplicativeIdempotent a t | a -> t
-
 
 -- | product definition avoiding a clash with the Product monoid in base
 --

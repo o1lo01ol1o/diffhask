@@ -24,7 +24,7 @@ module Internal.NumHask.Algebra.Additive
   , AdditiveLeftCancellative(..)
   , AdditiveGroup(..)
   , Trace(..)
-  , Delta(..)
+  , AdditiveBox(..)
   ) where
 import           Internal.Internal
 import           Protolude (Bool (..), Double, Float, Int, Integer, pure, ($))
@@ -44,7 +44,7 @@ import qualified Protolude as P
 -- > ∀ a,b ∈ A: a `plus` b ∈ A
 --
 -- law is true by construction in Haskell
-class AdditiveMagma a b t | a b -> t, a -> t, b -> t where
+class  AdditiveMagma a b t | a b -> t, a -> t, b -> t where
   plus :: a -> b -> Computation t (D t)
 
 instance AdditiveMagma (Computation Float (D Float)) (Computation Float (D Float)) Float where
@@ -86,6 +86,13 @@ instance AdditiveMagma (D Double) (Computation Double (D Double)) Double where
 instance AdditiveMagma (D Double) (D Double) Double where
   plus = binOp Add
 
+
+instance AdditiveBox (D Double) (D Double) Double where
+  boxAdd a b = a + b
+
+instance AdditiveBox (D Float) (D Float) Float where
+  boxAdd a b = a + b
+
 -- | Addition
 -- >>> compute $ diff' (\x -> x + a) a
 -- (D 6.0,D 1.0)
@@ -101,15 +108,15 @@ instance DfDbBin Add (D a) a where
   {-# INLINE df_db #-}
   df_db _ _ _ _ bt = pure bt
 
-instance (P.Num a) => BinOp Add (D a) (D a) a where
+instance (ScalarInABox a) => BinOp Add (D a) (D a) a where
   {-# INLINE fd_bin #-}
   fd_bin _ a b = binOp Add a b
   {-# INLINE df_dab #-}
   df_dab _ _ _ _ _ at _ bt = binOp Add at bt
 
-instance Trace Add a where
-  pushEl (B _ a b) dA = pure [(X dA, a), (X dA, b), (X dA, a), (X dA, b)]
-  resetEl (B _ a b) = pure [a, b, a, b]
+instance (ScalarInABox a) => Trace Add a where
+  pushEl (B _ a b) dA = pure [(X dA, X a), (X dA, X b), (X dA, X a), (X dA, X b)]
+  resetEl (B _ a b) = pure $  X P.<$> [a, b, a, b]
 
 
 -- | Unital magma for addition.
@@ -189,7 +196,7 @@ instance AdditiveInvertible  (D Double) Double where
 instance AdditiveInvertible   (D Float) Float where
   negate = monOp Negate
 
-instance (P.Num a, AdditiveInvertible (D a) a) => MonOp Negate a where
+instance (ScalarInABox a, AdditiveInvertible (D a) a) => MonOp Negate a where
   {-# INLINE ff #-}
   ff _ a = P.negate a
   {-# INLINE fd #-}
@@ -197,11 +204,11 @@ instance (P.Num a, AdditiveInvertible (D a) a) => MonOp Negate a where
   {-# INLINE df #-}
   df _ _ _ at = monOp Negate at
 
-instance (AdditiveInvertible (D a) a) => Trace Negate a where
+instance (ScalarInABox a, AdditiveInvertible (D a) a) => Trace Negate a where
   pushEl (U _ a) dA = do
     cda <- negate dA
-    pure [(X cda, a)]
-  resetEl (U _ a) = pure [a]
+    pure [(X cda, X a)]
+  resetEl (U _ a) = pure [X a]
 
 -- | Idempotent magma for addition.
 --

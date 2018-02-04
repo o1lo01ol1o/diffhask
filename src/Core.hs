@@ -174,7 +174,7 @@ type Differentiable t
      , KleeneAlgebra (Computation t (D t)) (D t) t
      , KleeneAlgebra (Computation t (D t)) (Computation t (D t)) t
      , KleeneAlgebra (D t) (Computation t (D t)) t
-     
+
      )
 
 
@@ -184,7 +184,6 @@ t :: forall a. (Differentiable a) => D a -> Computation a (Tangent a)
 t =
   \case
     D _ -> pure (zero :: D a)
-    Dm _ -> pure (zero :: D a)
     DF _ at _ -> pure at
     DR {} -> error "Can't get tangent of a reverse node"
 
@@ -203,20 +202,17 @@ mkReverse i d = r d (N Noop) i
 instance Trace Noop a where
   pushEl _ _ = pure []
   resetEl _ = pure []
-addDeltas :: D b -> Delta a -> Computation t (ModuleTypes (D b))
+
+addDeltas :: (ModuleTypes a b ~ t) => Box a -> Box b -> Computation t (Box (AddModules a b))
 addDeltas a b =
   case (a, b) of
-    (a, X xb) -> case a of
-      D aa -> do aa + xb
-    -- (M ma, X xb) -> ma .+ xb
-    -- (X xa, M mb) -> xa +. mb
-    (ma, M mb) -> case ma of
-      Dm aa -> aa .+. mb
-      D aa -> aa +. mb
-
+    (X xa, X xb) -> fmap X (boxAdd xa xb)
+    (M ma, X xb) -> fmap M (boxModuleAddL ma xb)
+    (X xa, M mb) -> fmap M (boxModuleAddR xa mb)
+    (M ma, M mb) -> fmap M (boxBasisAdd ma mb)
 
 applyDelta :: (Differentiable a) => UID
-  -> Delta a
+  -> Box a
   -> Adjoints a
   -> Maybe (Computation a (D a))
 applyDelta tag dlta adjs=
@@ -247,7 +243,7 @@ incrementFanout u = do
         return f)
 
 
-reset :: forall a. (Differentiable a, Show a) => [D a] -> Computation a ()
+reset :: forall a. (Differentiable a, Show a) => [Box a] -> Computation a ()
 reset l =
   case l of
     [] -> return ()
@@ -257,7 +253,7 @@ reset l =
           fanout <- incrementFanout uniq
           if fanout == Tag 1 then
             do
-              modify (\st -> st & adjoints %~ M.insert uniq (zero :: D a))
+              modify (\st -> st & adjoints %~ M.insert uniq  (X (zero :: D a)))
               x <- resetEl o
               reset $ x `mappend` xs -- verify this
             else reset xs
@@ -265,7 +261,7 @@ reset l =
         _ -> reset xs
 
 -- recursively pushes nodes onto the reverse mode stack and evaluates partials
-push :: (Differentiable a) => [(Delta a, D a)] -> Computation a ()
+push :: (Differentiable a) => [(Box a, Box a)] -> Computation a ()
 push l =
   case l of
     [] -> return ()
@@ -288,15 +284,15 @@ push l =
             Nothing -> error "key not found in adjoints!"
         _ -> push xs
 
-reverseReset :: (Differentiable a, Show a) => D a -> Computation a ()
+reverseReset :: (Differentiable a, Show a) => Box a -> Computation a ()
 reverseReset d = do
   modify (& fanouts .~ M.empty )
-  reset [d]
+  reset [ d]
 
-reverseProp :: ( Differentiable a, Show a) => D a -> D a -> Computation a ()
+reverseProp :: ( Differentiable a, Show a) => Box a -> Box a -> Computation a ()
 reverseProp  v d = do
   reverseReset  d
-  push [(X v, d)]
+  push [( v,  d)]
 
 {-# INLINE primalTanget #-}
 primalTanget :: (Differentiable a, Show a) => D a -> Computation a (D a, Tangent a)
@@ -304,7 +300,7 @@ primalTanget d = do
   ct <- t d
   pure (p d, ct)
 
-adjoint :: forall a. (Differentiable a, Show a) =>  D a -> Computation a (D a)
+adjoint :: forall a. (Differentiable a, Show a) =>  D a -> Computation a (Box a)
 adjoint d =
   case d of
     DR _ _ _ uniq -> do
@@ -314,7 +310,7 @@ adjoint d =
         Nothing -> error "Adjoint not in map!"
     DF{} -> error "Cannot get adjoint value of DF. Use makeReverse on this node when composing the computation."
     D _ -> pure (zero :: D a)
-    Dm _ -> pure (zero :: D a)
+
 
 runComputation :: (Differentiable a) => State s a -> s -> (a, s)
 runComputation = runState

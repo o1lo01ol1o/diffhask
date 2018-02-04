@@ -15,6 +15,8 @@
 module Internal.Internal (module Internal.Internal) where
 import           Control.Monad.State.Strict (State, evalState, get, gets,
                                              modify, put, runState, (>=>))
+import qualified Data.Dependent.Map                   as DM (DMap, empty, insert, lookup,
+                                                  update, updateLookupWithKey)
 import qualified Data.Map                   as M (Map, empty, insert, lookup,
                                                   update, updateLookupWithKey)
 import           Lens.Micro                 ((%~), (&), (.~), (^.))
@@ -27,7 +29,9 @@ import qualified Protolude                    as P
 import Data.Dependent.Sum
 import Data.Functor.Identity
 import Data.GADT.Show
+import Data.GADT.Show.TH
 import Data.GADT.Compare
+import Data.GADT.Compare.TH
 
 
 data ComputationState a = ComputationState
@@ -43,68 +47,13 @@ type Computation a = State (ComputationState a)
 
 data D a where
   D :: a -> D a -- scalar
-  Dm :: (Show (r a)) => r a -> D (r a) -- array
   DF :: Primal a -> Tangent a -> Tag -> D a
   DR :: (Show op) => D a -> DualTrace op a -> Tag -> UID -> D a
 
 
--- data Node a where
---   Scalar :: forall a. Node (D a)
---   Array :: forall r a. Node (D (r a, a))
-
--- instance Eq (Node a) where
---     (==) = defaultEq
-
--- instance GEq Node where
---     geq Scalar Scalar = Just Refl
---     geq Array Array = Just Refl
---     geq _   _   = Nothing
-
--- instance EqTag Node Identity where
---     eqTagged Scalar Scalar = (==)
---     eqTagged Array  Array = (==)
---     eqTagged _   _   = const (const False)
-
--- instance GCompare Node where
---     gcompare Scalar Scalar = GEQ
---     gcompare Scalar _   = GLT
---     gcompare _   Scalar = GGT
-
---     gcompare Array  Array = GEQ
---     gcompare Array  _   = GLT
---     gcompare _   Array = GGT
-
--- instance OrdTag Node Identity where
-
---     compareTagged Scalar Scalar = compare
---     compareTagged Array  Array = compare
---     compareTagged _   _   = error "OrdTag (Node): bad case"
-
--- instance Show (Node a) where
---     showsPrec _ Scalar      = showString "Scalar"
---     showsPrec _ Array      = showString "Array"
-
--- instance GShow Node where
---     gshowsPrec = showsPrec
-
--- instance ShowTag Node Identity where
---     showTaggedPrec Scalar = showsPrec
---     showTaggedPrec Array = showsPrec
-
--- instance GRead Node where
---     greadsPrec _ str = case tag of
---         "Scalar" -> [(GReadResult (\k -> k Scalar), rest)]
---         "Array" -> [(GReadResult (\k -> k Array), rest)]
---         _     -> []
---         where (tag, rest) = splitAt 3 str
-
--- instance ReadTag Node Identity where
---     readTaggedPrec Scalar = readsPrec
---     readTaggedPrec Array = readsPrec
 
 instance (Show a, Show Tag, Show UID ) => Show (D a) where
   show (D a) = "D " ++ show a
-  show (Dm a) = "D " ++ show a
   show (DF p t ti) = "DF " ++ show p ++ show t ++ show ti
   show (DR p dt ti uid) = "DR " ++ show p ++ show dt ++ show ti ++ show uid
 
@@ -113,9 +62,35 @@ type Tangent a = D a
 
 type FptNode a = (D a, D a, D a, D a) -- nodes needed for a fixpoint evaluation
 
-data Delta a where
-  X :: (D a) -> Delta a -- scalar
-  M :: D (r a) -> Delta a -- tensor
+class AdditiveBox a b t | a b -> t where
+  boxAdd :: a -> b -> Computation t (D t)
+
+class AdditiveBoxModule r a b t | a b -> t where
+  boxModuleAddL ::
+       (ModuleShape a ~ r t) => a -> b -> Computation t (D (ModuleShape a))
+  boxModuleAddR ::
+       (ModuleShape b ~ r t) => a -> b -> Computation t (D (ModuleShape b))
+
+class AdditiveBoxBasis a b m t | a b -> t, a -> t, b -> t where
+  boxBasisAdd :: a -> b -> Computation t (D (m t))
+
+type ScalarInABox a = (ModuleType (D a) ~ a, P.Num a, AdditiveBox (D a) (D a) a)
+
+data Contents = Array | Scalar
+
+data Box a where
+  X
+    :: (AdditiveBox (D a) (D a) (ModuleType (D a)), ModuleShape (D a) ~ a)
+    => D a
+    -> Box (ModuleType (D a))
+  M
+    :: ( AdditiveBoxModule r (D t) a t
+       , AdditiveBoxModule r a (D t) t
+       , AdditiveBoxBasis (D (r a)) (D (r a)) r t
+       , t ~ ModuleType (D (r a))
+       )
+    => D (r a)
+    -> Box t
 
 -- class CDelta a t where
 --   data Delta t v
@@ -149,17 +124,19 @@ type family ModuleTypes a b where
   ModuleTypes _ (D (r t)) = t
   ModuleTypes (D (t)) (D (t)) = t
 
--- class AdditiveDelta a b t da db where
---   addDeltas ::
---        ( a ~ IsScalar da, b ~ IsScalar db)
---     => da
---     -> db
---     -> Computation t (D t)
+type family AddModules a b where
+  AddModules (D (r t)) _ = (D (r t))
+  AddModules _ (D (r t)) = (D (r t))
+  AddModules (D (t)) (D (t)) = (D (t))
 
 -- FIXME: singleton types on the DualTrace / Arity combination would restrict at least resetEl to a single possible implementation.
 class Trace op a where
-  resetEl :: DualTrace op a -> Computation a [D a]
-  pushEl :: DualTrace op a -> D a -> Computation a [(Delta a, D a)]
+  resetEl :: (ModuleType b ~ a) => DualTrace op a -> Computation a [Box b]
+  pushEl ::
+       (ModuleType (D a) ~ t)
+    => DualTrace op a
+    -> D a
+    -> Computation t [(Box a, Box a)]
   {-# MINIMAL (resetEl, pushEl) #-}
 
 
@@ -182,7 +159,7 @@ data Divide = Divide deriving Show
 -- To store the adoint we have to keep track of the outputs of an operation as well as the expressions that yeild the dual of the input arguments
 data DualTrace op a where
   N :: op -> DualTrace op a
-  U :: op -> D a -> DualTrace op a
+  U ::  op -> D a -> DualTrace op a
   B :: op -> D a -> D a -> DualTrace op a
   IxU :: op -> D a -> [Int]  -> DualTrace op a
   FxP :: op ->  FptNode a -> DualTrace op a
@@ -196,7 +173,7 @@ instance (Show op, Show a) => Show (DualTrace op a) where
 
 type Fanouts = M.Map UID Tag
 
-type Adjoints a = M.Map UID (D a)
+type Adjoints a = M.Map UID (Box a)
 
 newtype Tag = Tag Int
   deriving (Eq, Ord, Show)
@@ -232,7 +209,6 @@ p :: D a -> D a
 p =
   \case
     D v -> D v
-    Dm v -> Dm v
     DF d _ _ -> d
     DR d _ _ _ -> d
 
@@ -241,7 +217,6 @@ pD :: D a -> D a
 pD =
   \case
     D v -> D v
-    Dm v -> Dm v
     DF d _ _ -> pD d
     DR d _ _ _ -> pD d
 
@@ -275,7 +250,6 @@ monOp' :: (Trace op a, Computation a ~ m, Show op) =>
 monOp' _ a ff fd df r_ =
   case a of
     D ap -> return . D $ ff ap
-    Dm ap -> return . Dm $ ff ap
     DF ap at ai -> do
       cp <- fd ap
       cdf <- df cp ap at
@@ -305,18 +279,6 @@ binOp' _ a b ff_fn fd df_da df_db df_dab r_d_d r_d_c r_c_d = do
     D ap ->
       case b of
         D bp -> return . D $ ff_fn ap bp
-        Dm bp -> return . Dm $ ff_fn ap bp
-        DF bp bt bi -> do
-          cp <- fd a bp
-          cdf <- df_db cp bp bt
-          return $ DF cp cdf bi
-        DR bp _ bi _ -> do
-          cfd <- fd a bp
-          r (cfd) (r_c_d a b) bi
-    Dm ap ->
-      case b of
-        D bp -> return . D $ ff_fn ap bp
-        Dm bp -> return . Dm $ ff_fn ap bp
         DF bp bt bi -> do
           cp <- fd a bp
           cdf <- df_db cp bp bt
@@ -327,10 +289,6 @@ binOp' _ a b ff_fn fd df_da df_db df_dab r_d_d r_d_c r_c_d = do
     DF ap at ai ->
       case b of
         D _ -> do
-          cp <- fd ap b
-          cdf <- df_da cp ap at
-          return $ DF cp (cdf) ai
-        Dm _ -> do
           cp <- fd ap b
           cdf <- df_da cp ap at
           return $ DF cp (cdf) ai
@@ -361,9 +319,6 @@ binOp' _ a b ff_fn fd df_da df_db df_dab r_d_d r_d_c r_c_d = do
     DR ap _ ai _ ->
       case b of
         D _ -> do
-          fda <- fd ap b
-          r (fda) (r_d_c a b) ai
-        Dm _ -> do
           fda <- fd ap b
           r (fda) (r_d_c a b) ai
         DF bp bt bi ->
