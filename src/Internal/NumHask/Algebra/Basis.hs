@@ -13,7 +13,6 @@ module Internal.NumHask.Algebra.Basis
   , AdditiveGroupBasis(..)
   , MultiplicativeBasis(..)
   , MultiplicativeGroupBasis(..)
-  , AdditiveBoxBasis(..)
   ) where
 
 import           Internal.NumHask.Algebra.Additive
@@ -26,18 +25,18 @@ import Internal.Internal
 -- > zero .+. a = a
 -- > a .+. zero = a
 -- > a .+. b == b .+. a
-class (Additive a b t) =>
-      AdditiveBasis a b m t | a b -> t, a -> t, b -> t where
+class (Additive a b, r ~ DomainArr(Domains a b)) =>
+      AdditiveBasis a b r  where
   infixl 7 .+.
-  (.+.) :: a -> b -> Computation t (D (m t))
+  (.+.) :: a -> b -> CodomainB a b
 
 -- | element by element subtraction
 --
 -- > a .-. a = singleton zero
-class (AdditiveGroup a b t) =>
-      AdditiveGroupBasis a b m t | a b -> t, a -> t, b -> t where
+class (AdditiveGroup a b, r ~ DomainArr(Domains a b) ) =>
+      AdditiveGroupBasis a b r where
   infixl 6 .-.
-  (.-.) :: a -> b -> Computation t (D (m t))
+  (.-.) :: a -> b -> CodomainB a b
 
 -- | element by element multiplication
 --
@@ -45,22 +44,18 @@ class (AdditiveGroup a b t) =>
 -- > singleton one .*. a = a
 -- > a .*. singelton one = a
 -- > a .*. b == b .*. a
-class (Multiplicative a b t) =>
-      MultiplicativeBasis a b m t | a b -> t, a -> t, b -> t where
+class (Multiplicative a b, r ~ DomainArr(Domains a b) ) =>
+      MultiplicativeBasis a b r  where
   infixl 7 .*.
-  (.*.) :: a -> b -> Computation t (D (m t))
+  (.*.) :: a -> b -> CodomainB a b
 
 -- | element by element division
 --
 -- > a ./. a == singleton one
-class (MultiplicativeGroup a b t) =>
-      MultiplicativeGroupBasis a b m t | a b -> t, a -> t, b -> t where
+class (MultiplicativeGroup a b, r ~ DomainArr(Domains a b) ) =>
+      MultiplicativeGroupBasis a b r where
   infixl 7 ./.
-  (./.) :: a -> b -> Computation t (D (m t))
+  (./.) :: a -> b -> CodomainB a b
 
--- data M
-
--- instance (AdditiveBasis (D (r a)) (D (r a)) r a) => CDelta (D (r a)) a where
---   data Delta a M = M (D (r a))
 
 

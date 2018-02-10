@@ -1,11 +1,11 @@
-{-# LANGUAGE ExplicitNamespaces #-}
-{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE ExplicitNamespaces    #-}
+{-# LANGUAGE FlexibleContexts      #-}
+{-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE PolyKinds #-}
-{-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE TypeOperators #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE PolyKinds             #-}
+{-# LANGUAGE TypeFamilies          #-}
+{-# LANGUAGE TypeOperators         #-}
+{-# LANGUAGE UndecidableInstances  #-}
 {-# OPTIONS_GHC -Wall #-}
 
 -- | Algebra for Representable numbers
@@ -21,14 +21,14 @@ module Internal.NumHask.Algebra.Module
   , AdditiveBoxModule(..)
   ) where
 
-import Internal.NumHask.Algebra.Additive
-import Internal.NumHask.Algebra.Field
-import Internal.NumHask.Algebra.Metric
-import Internal.NumHask.Algebra.Multiplicative
-import Internal.NumHask.Algebra.Ring
-import Internal.Internal
-import Protolude
-       (Double, Float, Int, Integer)
+import           Internal.Internal
+import           Internal.NumHask.Algebra.Additive
+import           Internal.NumHask.Algebra.Field
+import           Internal.NumHask.Algebra.Metric
+import           Internal.NumHask.Algebra.Multiplicative
+import           Internal.NumHask.Algebra.Ring
+import           Protolude                               (Double, Float, Int,
+                                                          Integer)
 
 
 
@@ -40,12 +40,12 @@ import Protolude
 -- > (a + b) .+ c == (a .+ c) + b
 -- > a .+ zero == a
 -- > a .+ b == b +. a
-class (Additive a b t) =>
-      AdditiveModule r a b t where
+class (Additive a b, r ~ DomainArr(Domains a b)) =>
+      AdditiveModule r a b where
   infixl 6 .+
-  (.+) :: (ModuleShape a ~ r t) => a -> b -> Computation t (D (ModuleShape a))
+  (.+) ::  a -> b -> CodomainB a b
   infixl 6 +.
-  (+.) :: (ModuleShape b ~ r t) => a -> b -> Computation t (D (ModuleShape b))
+  (+.) :: a -> b -> CodomainB a b
 
 
 -- | Subtraction Module Laws
@@ -54,12 +54,12 @@ class (Additive a b t) =>
 -- > (a + b) .- c == (a .- c) + b
 -- > a .- zero == a
 -- > a .- b == negate b +. a
-class (AdditiveGroup a b t, AdditiveModule r a b t) =>
-      AdditiveGroupModule r a b t where
+class (AdditiveGroup a b, AdditiveModule r a b, r ~ DomainArr(Domains a b)) =>
+      AdditiveGroupModule r a b where
   infixl 6 .-
-  (.-) :: (ModuleShape a ~ r t) => a -> b -> Computation t (D (ModuleShape a))
+  (.-) ::  a -> b -> CodomainB a b
   infixl 6 -.
-  (-.) :: (ModuleShape b ~ r t) => a -> b -> Computation t (D (ModuleShape b))
+  (-.) ::   a -> b -> CodomainB a b
 
 -- | Multiplicative Module Laws
 --
@@ -68,37 +68,36 @@ class (AdditiveGroup a b t, AdditiveModule r a b t) =>
 -- > c *. (a + b) == (c *. a) + (c *. b)
 -- > a .* zero == zero
 -- > a .* b == b *. a
-class (Multiplicative a b t) =>
-      MultiplicativeModule r a b t where
+class (Multiplicative a b, r ~ DomainArr(Domains a b)) =>
+      MultiplicativeModule r a b where
   infixl 7 .*
-  (.*) :: (ModuleShape a ~ r t) => a -> b -> Computation t (D (ModuleShape a))
+  (.*) ::  a -> b -> CodomainB a b
   infixl 7 *.
-  (*.) :: (ModuleShape b ~ r t) => a -> b -> Computation t (D (ModuleShape b))
+  (*.) ::  a -> b -> CodomainB a b
 
 -- | Division Module Laws
 --
 -- > nearZero a || a ./ one == a
 -- > b == zero || a ./ b == recip b *. a
-class (MultiplicativeGroup a b t, MultiplicativeModule r a b t) =>
-      MultiplicativeGroupModule r a b t where
+class (MultiplicativeGroup a b, MultiplicativeModule r a b, r ~ DomainArr(Domains a b)) =>
+      MultiplicativeGroupModule r a b where
   infixl 7 ./
-  (./) :: (ModuleShape a ~ r t) => a -> b -> Computation t (D (ModuleShape a))
+  (./) ::  a -> b -> CodomainB a b
   infixl 7 /.
-  (/.) :: (ModuleShape b ~ r t) => a -> b -> Computation t (D (ModuleShape b))
+  (/.) ::  a -> b -> CodomainB a b
 
 -- | Banach (with Norm) laws form rules around size and direction of a number, with a potential crossing into another codomain.
 --
 -- > a == singleton zero || normalize a *. size a == a
-class ( ExpField a t
-      , Normed (ModuleShape a) t
-      , MultiplicativeGroupModule r a a t
-      , MultiplicativeGroupModule r a (Computation t (D t)) t
+class ( ExpField a
+      , Normed  a
+      , MultiplicativeGroupModule r a a, r ~ DomainArr(Domains a b)
       ) =>
-      Banach r a t where
+      Banach r a where
   normalize ::
-       (ModuleShape a ~ r t, Normed a t)
+       (Normed a )
     => a
-    -> Computation t (D (ModuleShape a))
+    -> CodomainU a
   normalize a = a ./ size a
 
 -- | the inner product of a representable over a semiring
@@ -107,14 +106,13 @@ class ( ExpField a t
 -- > a <.> (b +c) == a <.> b + a <.> c
 -- > a <.> (s *. b + c) == s * (a <.> b) + a <.> c
 -- (s0 *. a) <.> (s1 *. b) == s0 * s1 * (a <.> b)
-class (Semiring a b t) =>
-      Hilbert r a b t where
+class (Semiring a b, r ~ DomainArr(Domains a b)) =>
+      Hilbert r a b where
   infix 8 <.>
   (<.>) ::
-       (ModuleShape b ~ r t, ModuleShape a ~ r t)
-    => a
+     a
     -> b
-    -> Computation t (D t)
+    -> CodomainB a b
 
 -- | tensorial type
 type family (><) (a :: k1) (b :: k2) :: *

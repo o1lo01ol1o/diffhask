@@ -1,15 +1,15 @@
-{-# LANGUAGE ConstraintKinds        #-}
-{-# LANGUAGE DataKinds              #-}
-{-# LANGUAGE FlexibleContexts       #-}
-{-# LANGUAGE FlexibleInstances      #-}
-{-# LANGUAGE GADTs                  #-}
-{-# LANGUAGE LambdaCase             #-}
-{-# LANGUAGE MultiParamTypeClasses  #-}
-{-# LANGUAGE NoImplicitPrelude      #-}
-{-# LANGUAGE PolyKinds              #-}
-{-# LANGUAGE TypeFamilies           #-}
-{-# LANGUAGE UndecidableInstances   #-}
-{-#Language ScopedTypeVariables #-}
+{-# LANGUAGE ConstraintKinds       #-}
+{-# LANGUAGE DataKinds             #-}
+{-# LANGUAGE FlexibleContexts      #-}
+{-# LANGUAGE FlexibleInstances     #-}
+{-# LANGUAGE GADTs                 #-}
+{-# LANGUAGE LambdaCase            #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE NoImplicitPrelude     #-}
+{-# LANGUAGE PolyKinds             #-}
+{-# LANGUAGE ScopedTypeVariables   #-}
+{-# LANGUAGE TypeFamilies          #-}
+{-# LANGUAGE UndecidableInstances  #-}
 
 module Core
     ( module Core
@@ -19,11 +19,12 @@ import           Control.Monad.State.Strict (State, evalState, get, gets,
                                              modify, put, runState, (>=>))
 import qualified Data.Map                   as M (Map, empty, insert, lookup,
                                                   update, updateLookupWithKey)
-import           Internal.Internal
+import           Internal.Internal hiding (Differentiable(..))
+import           Internal.NumHask.Prelude   hiding (State, diff, evalState,
+                                             runState)
 import           Lens.Micro                 ((%~), (&), (.~), (^.))
-import           Internal.NumHask.Prelude hiding (State, runState, diff, evalState)
-import Prelude (error)
-import qualified Protolude                    as P
+import           Prelude                    (error)
+import qualified Protolude                  as P
 
 -- $setup
 -- >>> :set -XDataKinds
@@ -39,7 +40,7 @@ import qualified Protolude                    as P
 type AdditiveDifferentiable t
   = ( --AdditiveUnital (D t) t
      --, AdditiveUnital (Computation t (D t)) t
-     
+
      --,
      AdditiveMagma (D t) (D t) t
      , AdditiveMagma (Computation t (D t)) (D t) t
@@ -54,7 +55,7 @@ type AdditiveDifferentiable t
 
      , AdditiveInvertible (D t) t
      , AdditiveInvertible (Computation t (D t)) t
-     
+
      , AdditiveIdempotent (D t) (D t) t
      , AdditiveIdempotent (Computation t (D t)) (D t) t
      , AdditiveIdempotent (Computation t (D t)) (Computation t (D t)) t

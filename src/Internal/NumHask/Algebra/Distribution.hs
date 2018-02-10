@@ -8,10 +8,10 @@ module Internal.NumHask.Algebra.Distribution
   ( Distribution
   ) where
 
+import           Internal.Internal
 import           Internal.NumHask.Algebra.Additive
 import           Internal.NumHask.Algebra.Multiplicative
-import           Protolude                      (Double, Float)
-import Internal.Internal
+import           Protolude                               (Double, Float)
 
 -- | Distribution (and annihilation) laws
 --
@@ -19,21 +19,21 @@ import Internal.Internal
 -- > (a + b) * c == a * c + b * c
 -- > a * zero == zero
 -- > zero * a == zero
-class (Additive a b t, MultiplicativeMagma a b t) =>
-      Distribution a b t | a b -> t, a -> t, b -> t
+class (Additive a b, MultiplicativeMagma a b) =>
+      Distribution a b
 
-instance Distribution (D Double) (D Double) Double
+instance Distribution (D r Double) (D r Double)
 
-instance Distribution (Computation Double (D Double)) (D Double) Double
+instance Distribution (Computation r Double (D r Double)) (D r Double)
 
-instance Distribution (D Double) (Computation Double (D Double)) Double
+instance Distribution (D r Double) (Computation r Double (D r Double))
 
-instance Distribution (D Float) (D Float) Float
+instance Distribution (D r Float) (D r Float)
 
-instance Distribution (D Float) (Computation Float (D Float)) Float
+instance Distribution (D r Float) (Computation r Float (D r Float))
 
-instance Distribution (Computation Float (D Float)) (D Float) Float
+instance Distribution (Computation r Float (D r Float)) (D r Float)
 
-instance Distribution (Computation Double (D Double)) (Computation Double (D Double)) Double
+instance Distribution (Computation r Double (D r Double)) (Computation r Double (D r Double))
 
-instance Distribution (Computation Float (D Float)) (Computation Float (D Float)) Float
+instance Distribution (Computation r Float (D r Float)) (Computation r Float (D r Float))
