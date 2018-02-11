@@ -17,6 +17,7 @@ module Internal.NumHask.Algebra.Basis
 
 import           Internal.NumHask.Algebra.Additive
 import           Internal.NumHask.Algebra.Multiplicative
+import Internal.NumHask.Algebra.Module
 import Internal.Internal
 
 -- | element by element addition
@@ -30,6 +31,14 @@ class (Additive a b r t) =>
   infixl 7 .+.
   (.+.) :: a -> b -> Computation r t (D r t)
 
+instance (P.Num a) => FfBin Add a r where
+  {-#INLINE rff_bin #-}
+  rff_bin _ a b = a .+. b
+  {-#INLINE r_ff_bin #-}
+  r_ff_bin _ a b = a .+ b
+  {-#INLINE _ff_bin #-}
+  _ff_bin _ a b = a +. b
+
 -- | element by element subtraction
 --
 -- > a .-. a = singleton zero
@@ -37,6 +46,7 @@ class (AdditiveGroup a b r t ) =>
       AdditiveGroupBasis r a b t where
   infixl 6 .-.
   (.-.) :: a -> b -> Computation r t (D r t)
+
 
 -- | element by element multiplication
 --
@@ -49,6 +59,14 @@ class (Multiplicative a b  r t) =>
   infixl 7 .*.
   (.*.) :: a -> b -> Computation r t (D r t)
 
+instance (P.Num a) => FfBin Multiply a r where
+  {-#INLINE rff_bin #-}
+  rff_bin _ a b = a .*. b
+  {-#INLINE r_ff_bin #-}
+  r_ff_bin _ a b = a .* b
+  {-#INLINE _ff_bin #-}
+  _ff_bin _ a b = a *. b
+
 -- | element by element division
 --
 -- > a ./. a == singleton one
@@ -57,5 +75,11 @@ class (MultiplicativeGroup a b r t ) =>
   infixl 7 ./.
   (./.) :: a -> b -> Computation r t (D r t)
 
-
+instance (P.Num a) => FfBin Divide a r where
+  {-#INLINE rff_bin #-}
+  rff_bin _ a b = a ./. b
+  {-#INLINE r_ff_bin #-}
+  r_ff_bin _ a b = a ./ b
+  {-#INLINE _ff_bin #-}
+  _ff_bin _ a b = a /. b
 

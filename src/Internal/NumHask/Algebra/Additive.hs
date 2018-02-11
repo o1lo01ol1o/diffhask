@@ -85,6 +85,7 @@ instance AdditiveMagma (D r Double) (D r Double) r Double where
   plus = binOp Add
 
 
+
 instance (P.Num a) => FFBin Add a where
   {-# INLINE ff_bin #-}
   ff_bin _ a b = b P.+ a

@@ -8,34 +8,34 @@
 {-# LANGUAGE MultiParamTypeClasses  #-}
 {-# LANGUAGE NoImplicitPrelude      #-}
 {-# LANGUAGE PolyKinds              #-}
+{-# LANGUAGE RankNTypes             #-}
 {-# LANGUAGE TemplateHaskell        #-}
 {-# LANGUAGE TypeFamilies           #-}
-{-# LANGUAGE RankNTypes           #-}
 
-{-# LANGUAGE TypeInType           #-}
+{-# LANGUAGE TypeFamilyDependencies #-}
+{-# LANGUAGE TypeInType             #-}
 {-# LANGUAGE UndecidableInstances   #-}
-{-# LANGUAGE TypeFamilyDependencies   #-}
 
 module Internal.Internal (module Internal.Internal) where
 import           Control.Monad.State.Strict (State, evalState, get, gets,
                                              modify, put, runState, (>=>))
-import qualified Data.Dependent.Map                   as DM (DMap, empty, insert, lookup,
-                                                  update, updateLookupWithKey)
+import qualified Data.Dependent.Map         as DM (DMap, empty, insert, lookup,
+                                                   update, updateLookupWithKey)
 import qualified Data.Map                   as M (Map, empty, insert, lookup,
                                                   update, updateLookupWithKey)
 import           Lens.Micro                 ((%~), (&), (.~), (^.))
 import           Lens.Micro.TH              (makeLenses)
 import           Prelude                    hiding (abs, negate, signum, (*),
-                                             (+), (-), (/), )
-import qualified Protolude                    as P
+                                             (+), (-), (/))
+import qualified Protolude                  as P
 
 
-import Data.Dependent.Sum
-import Data.Functor.Identity
-import Data.GADT.Show
-import Data.GADT.Show.TH
-import Data.GADT.Compare
-import Data.GADT.Compare.TH
+import           Data.Dependent.Sum
+import           Data.Functor.Identity
+import           Data.GADT.Compare
+import           Data.GADT.Compare.TH
+import           Data.GADT.Show
+import           Data.GADT.Show.TH
 
 
 data ComputationState r a = ComputationState
@@ -56,9 +56,9 @@ data D r a where
   DR :: (Show op) => D r a -> DualTrace op r a -> Tag -> UID -> D r a
 
 instance (Show a, Show Tag, Show UID, Show (r a)) => Show (D r a) where
-  show (D a) = "D " ++ show a
-  show (Dm a) = "D " ++ show (a)
-  show (DF p t ti) = "DF " ++ show p ++ show t ++ show ti
+  show (D a)            = "D " ++ show a
+  show (Dm a)           = "D " ++ show (a)
+  show (DF p t ti)      = "DF " ++ show p ++ show t ++ show ti
   show (DR p dt ti uid) = "DR " ++ show p ++ show dt ++ show ti ++ show uid
 
 type Primal r a = D r a
@@ -69,8 +69,8 @@ type FptNode r a = (D r a, D r a, D r a, D r a) -- nodes needed for a fixpoint e
 -- FIXME: singleton types on the DualTrace / Arity combination would restrict at least resetEl to a single possible implementation.
 class Trace op r a where
   resetEl :: DualTrace op r a -> Computation r a [D r a]
-  resetEl (U _ a) = pure [a]
-  resetEl (B _ a b) = pure [a, b, a, b]
+  resetEl (U _ a)     = pure [a]
+  resetEl (B _ a b)   = pure [a, b, a, b]
   resetEl (IxU _ a _) = pure [a]
   pushEl :: DualTrace op r a -> D r a -> Computation r a [(D r a, D r a)]
   {-# MINIMAL (resetEl, pushEl) #-}
@@ -160,7 +160,13 @@ instance (Ord a) => Ord (D r a) where
 --   case pD d of
 --     D v -> v
 --     Dm v -> v
+class FfMon op a where
+  ff :: op -> a -> a
 
+class MonOp op r a where
+  rff :: op -> r a -> r a
+  fd :: (Computation r a ~ m) => op -> D r a -> m (D r a)
+  df :: (Computation r a ~ m) => op -> D r a -> D r a -> D r a -> m (D r a)
 
 monOp ::
      (MonOp op r a, FfMon op a, (Trace op r a), Show op)
@@ -168,182 +174,17 @@ monOp ::
   -> D r a
   -> Computation r a (D r a)
 monOp op a =
-  let r_d =   U op
-  in monOp' op a (ff op) (rff op) (fd op) (df op) r_d
-
-monOp' ::
-     (Trace op r a, Computation r a ~ m, Show op)
-  => op
-  -> D r a
-  -> ( a -> a)
-  -> (r a ->r a)
-  -> (D r a -> m (D r a))
-  -> (D r a -> D r a -> D r a -> m (D r a))
-  -> (D r a -> DualTrace op r a)
-  -> Computation r a (D r a)
-monOp' _ a ff rff fd df r_ =
   case a of
-    D ap -> return . D $ ff ap
-    Dm ap -> return . Dm $ rff ap
+    D ap -> return . D $ ff op ap
+    Dm ap -> return . Dm $ rff op ap
     DF ap at ai -> do
-      cp <- fd ap
-      cdf <- df cp ap at
+      cp <- fd op ap
+      cdf <- df op cp ap at
       return $ DF cp cdf ai
-    DR ap _ ai _ ->do
-      cp <- fd ap
-      r cp (r_ a) ai
+    DR ap _ ai _ -> do
+      cp <- fd op ap
+      r cp (U op a) ai
 
-binOp' ::
-     (Num a, Trace op r a, Computation r a ~ m, Show op)
-  => op
-  -> (D r a)
-  -> (D r a)
-  -> (a -> a ->  a)
-  -> (r a ->r a -> r a)
-  -> (D r a -> D r a -> m (D r a))
-  -> (D r a -> D r a -> D r a -> m (D r a))
-  -> (D r a -> D r a -> D r a -> m (D r a))
-  -> (D r a -> D r a -> D r a -> D r a -> D r a -> m (D r a))
-  -> (D r a -> D r a -> DualTrace op r a)
-  -> (D r a -> D r a -> DualTrace op r a)
-  -> (D r a -> D r a -> DualTrace op r a)
-  -> m (D r a)
-
-
-binOp' _ a b ff_fn rff_fn fd df_da df_db df_dab r_d_d r_d_c r_c_d = do
-  case a of
-    D ap ->
-      case b of
-        D bp -> return . D $ ff_fn ap bp
-        Dm bp -> return . Dm $ rff_fn ap bp
-        DF bp bt bi -> do
-          cp <- fd a bp
-          cdf <- df_db cp bp bt
-          return $ DF cp cdf bi
-        DR bp _ bi _ -> do
-          cfd <- fd a bp
-          r (cfd) (r_c_d a b) bi
-    D ap ->
-      case b of
-        D bp -> return . D $ ff_fn ap bp
-        DF bp bt bi -> do
-          cp <- fd a bp
-          cdf <- df_db cp bp bt
-          return $ DF cp cdf bi
-        DR bp _ bi _ -> do
-          cfd <- fd a bp
-          r (cfd) (r_c_d a b) bi
-    Dm ap ->
-      case b of
-        Dm bp -> return . Dm $ rff_fn ap bp
-        DF bp bt bi -> do
-          cp <- fd a bp
-          cdf <- df_db cp bp bt
-          return $ DF cp cdf bi
-        DR bp _ bi _ -> do
-          cfd <- fd a bp
-          r (cfd) (r_c_d a b) bi
-    DF ap at ai ->
-      case b of
-        D _ -> do
-          cp <- fd ap b
-          cdf <- df_da cp ap at
-          return $ DF cp (cdf) ai
-        DF bp bt bi ->
-          case compare ai bi of
-            EQ -> do
-              cp <- fd ap bp
-              cdf <- df_dab cp ap at bp bt
-              return $ DF cp (cdf) ai
-            LT -> do
-              cp <- fd a bp
-              cdf <- df_db cp bp bt
-              return $ DF cp (cdf) bi
-            GT -> do
-              cp <- fd ap b
-              cdf <- df_da cp ap at
-              return $ DF cp (cdf) ai
-        DR bp _ bi _ ->
-          case compare ai bi of
-            LT -> do
-              fdb <- fd a bp
-              r (fdb) (r_c_d a b) bi
-            GT -> do
-              cp <- fd ap b
-              cdf <- df_da cp ap at
-              return $ DF cp (cdf) ai
-            EQ -> error "Forward and reverse AD r cannot run on the same level."
-    DR ap _ ai _ ->
-      case b of
-        D _ -> do
-          fda <- fd ap b
-          r (fda) (r_d_c a b) ai
-        DF bp bt bi ->
-          case compare ai bi of
-            EQ -> error "Forward and reverse AD cannot run on the same level."
-            LT -> do
-              cp <- fd a bp
-              cdf <- df_db cp bp bt
-              return $ DF cp (cdf) bi
-            GT -> do
-              fdb <- fd ap b
-              r (fdb) (r_d_c a b) ai
-        DR bp _ bi _ ->
-          case compare ai bi of
-            EQ -> do
-              fdap <- fd ap bp
-              r (fdap) (r_d_d a b) ai
-            LT -> do
-              fdab <- fd a bp
-              r (fdab) (r_c_d a b) bi
-            GT -> do
-              fdab <- fd ap b
-              r (fdab) (r_d_c a b) ai
-
-
-
-class (Num c, Show op) =>
-      FFBin op c where
-  ff_bin :: op -> c -> c -> c
- 
-  binOp ::
-       ( Trace op r c
-       , BinOp op r (D r c) (D r c) c
-       , DfDaBin op r (D r c) c
-       , DfDbBin op r (D r c) c
-       )
-    => op
-    -> D r c
-    -> D r c
-    -> Computation r c (D r c)
-  binOp op a b =
-    let traceOp = B op
-        r_d_d = traceOp
-        r_d_c = traceOp
-        r_c_d = traceOp
-    in binOp'
-         op
-         a
-         b
-         (ff_bin op)
-         (rff_bin op)
-         (fd_bin op)
-         (df_da op b)
-         (df_db op a)
-         (df_dab op a b)
-         r_d_d
-         r_d_c
-         r_c_d
-
-class FfMon op a where
-  ff :: op -> a -> a
-  
-  
-class MonOp op r a where
-  rff :: op -> r a -> r a
-  fd :: (Computation r a ~ m) => op -> D r a -> m (D r a)
-  df :: (Computation r a ~ m) => op -> D r a -> D r a -> D r a -> m (D r a)
-  
 class DfDaBin op r b c | b -> c where
   df_da ::
        (Computation r c ~ m) => op -> b -> D r c -> D r c -> D r c -> m (D r c)
@@ -353,12 +194,12 @@ class DfDbBin op r a c | a -> c where
        (Computation r c ~ m) => op -> a -> D r c -> D r c -> D r c -> m (D r c)
 
 class FfBin op a r where
-  rff_bin :: op -> r a -> r a -> r a
-  r_ff_bin :: op -> r a -> a -> r a
+  rff_bin :: op -> r a -> r a -> r a -- Forward mode function for arrays
+  r_ff_bin :: op -> r a -> a -> r a -- For scalar x arrays
+  _ff_bin :: op -> a -> r a -> r a -- For scalar x arrays
 
 class BinOp op r a b c | a b -> c where
   fd_bin :: (Computation r c ~ m) => op -> a -> b -> m (D r c)
-  
   df_dab ::
        (Computation r c ~ m)
     => op
@@ -370,3 +211,110 @@ class BinOp op r a b c | a b -> c where
     -> (D r c)
     -> (D r c)
     -> m (D r c)
+
+class (Num a, Show op) =>
+      FFBin op a where
+  ff_bin :: op -> a -> a -> a
+  binOp ::
+       ( Num a
+       , Trace op r a
+       , Computation r a ~ m
+       , Show op
+       , Trace op r a
+       , BinOp op r (D r a) (D r a) a
+       , DfDaBin op r (D r a) a
+       , DfDbBin op r (D r a) a
+       , FfBin op a r
+       )
+    => op
+    -> (D r a)
+    -> (D r a)
+    -> m (D r a)
+  binOp op a b = do
+    case a of
+      D ap ->
+        case b of
+          D bp -> return . D $ ff_bin op ap bp
+          Dm bp -> return . Dm $ _ff_bin op ap bp
+          DF bp bt bi -> do
+            cp <- fd_bin op a bp
+            cdf <- df_db op a cp bp bt
+            return $ DF cp cdf bi
+          DR bp _ bi _ -> do
+            cfd <- fd_bin op a bp
+            r (cfd) (B op a b) bi
+      Dm ap ->
+        case b of
+          D bp -> return . Dm $ r_ff_bin op ap bp
+          Dm bp -> return . Dm $ rff_bin op ap bp
+          DF bp bt bi -> do
+            cp <- fd_bin op a bp
+            cdf <- df_db op a cp bp bt
+            return $ DF cp cdf bi
+          DR bp _ bi _ -> do
+            cfd <- fd_bin op a bp
+            r (cfd) (B op a b) bi
+      DF ap at ai ->
+        case b of
+          D _ -> do
+            cp <- fd_bin op ap b
+            cdf <- df_da op b cp ap at
+            return $ DF cp (cdf) ai
+          Dm _ -> do
+            cp <- fd_bin op ap b
+            cdf <- df_da op b cp ap at
+            return $ DF cp (cdf) ai
+          DF bp bt bi ->
+            case compare ai bi of
+              EQ -> do
+                cp <- fd_bin op ap bp
+                cdf <- df_dab op a b cp ap at bp bt
+                return $ DF cp (cdf) ai
+              LT -> do
+                cp <- fd_bin op a bp
+                cdf <- df_db op a cp bp bt
+                return $ DF cp (cdf) bi
+              GT -> do
+                cp <- fd_bin op ap b
+                cdf <- df_da op b cp ap at
+                return $ DF cp (cdf) ai
+          DR bp _ bi _ ->
+            case compare ai bi of
+              LT -> do
+                fdb <- fd_bin op a bp
+                r (fdb) (B op a b) bi
+              GT -> do
+                cp <- fd_bin op ap b
+                cdf <- df_da op b cp ap at
+                return $ DF cp (cdf) ai
+              EQ ->
+                error "Forward and reverse AD r cannot run on the same level."
+      DR ap _ ai _ ->
+        case b of
+          D _ -> do
+            fda <- fd_bin op ap b
+            r (fda) (B op a b) ai
+          Dm _ -> do
+            fda <- fd_bin op ap b
+            r (fda) (B op a b) ai
+          DF bp bt bi ->
+            case compare ai bi of
+              EQ -> error "Forward and reverse AD cannot run on the same level."
+              LT -> do
+                cp <- fd_bin op a bp
+                cdf <- df_db op a cp bp bt
+                return $ DF cp (cdf) bi
+              GT -> do
+                fdb <- fd_bin op ap b
+                r (fdb) (B op a b) ai
+          DR bp _ bi _ ->
+            case compare ai bi of
+              EQ -> do
+                fdap <- fd_bin op ap bp
+                r (fdap) (B op a b) ai
+              LT -> do
+                fdab <- fd_bin op a bp
+                r (fdab) (B op a b) bi
+              GT -> do
+                fdab <- fd_bin op ap b
+                r (fdab) (B op a b) ai
