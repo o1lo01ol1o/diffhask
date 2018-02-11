@@ -20,29 +20,29 @@ import           Internal.NumHask.Algebra.Multiplicative
 import           Protolude                               (Double, Float)
 
 -- | Semiring
-class ( MultiplicativeAssociative a
-      , MultiplicativeUnital a
-      , MultiplicativeAssociative b
-      , MultiplicativeUnital b
-      , Distribution a b
+class ( MultiplicativeAssociative a r t
+      , MultiplicativeUnital a r t
+      , MultiplicativeAssociative b r t
+      , MultiplicativeUnital b r t
+      , Distribution a b r t
       ) =>
-      Semiring a b
+      Semiring a b r t
 
-instance Semiring (D r Double) (D r Double)
+instance Semiring (D r Double) (D r Double) r Double
 
-instance Semiring (Computation r Double (D r Double)) (D r Double)
+instance Semiring (Computation r Double (D r Double)) (D r Double) r Double
 
-instance Semiring (D r Double) (Computation r Double (D r Double))
+instance Semiring (D r Double) (Computation r Double (D r Double)) r Double
 
-instance Semiring (D r Float) (D r Float)
+instance Semiring (D r Float) (D r Float) r Float
 
-instance Semiring (D r Float) (Computation r Float (D r Float))
+instance Semiring (D r Float) (Computation r Float (D r Float)) r Float
 
-instance Semiring (Computation r Float (D r Float)) (D r Float)
+instance Semiring (Computation r Float (D r Float)) (D r Float) r Float
 
-instance Semiring (Computation r Double (D r Double)) (Computation r Double (D r Double))
+instance Semiring (Computation r Double (D r Double)) (Computation r Double (D r Double)) r Double
 
-instance Semiring (Computation r Float (D r Float)) (Computation r Float (D r Float))
+instance Semiring (Computation r Float (D r Float)) (Computation r Float (D r Float)) r Float
 
 
 
@@ -64,63 +64,62 @@ instance Semiring (Computation r Float (D r Float)) (Computation r Float (D r Fl
 -- > (a + b) `times` c == a `times` c + b `times` c
 -- > a `times` zero == zero
 -- > zero `times` a == zero
-class ( Semiring a b
-      , AdditiveGroup a b
+class ( Semiring a b r t
+      , AdditiveGroup a b r t
       ) =>
-      Ring a b
+      Ring a b r t
 
-instance Ring (D r Double) (D r Double)
+instance Ring (D r Double) (D r Double) r Double
 
-instance Ring (Computation r Double (D r Double)) (D r Double)
+instance Ring (Computation r Double (D r Double)) (D r Double) r Double
 
-instance Ring (D r Double) (Computation r Double (D r Double))
+instance Ring (D r Double) (Computation r Double (D r Double)) r Double
 
-instance Ring (D r Float) (D r Float)
+instance Ring (D r Float) (D r Float) r Float
 
-instance Ring (D r Float) (Computation r Float (D r Float))
+instance Ring (D r Float) (Computation r Float (D r Float)) r Float
 
-instance Ring (Computation r Float (D r Float)) (D r Float)
+instance Ring (Computation r Float (D r Float)) (D r Float) r Float
 
-instance Ring (Computation r Double (D r Double)) (Computation r Double (D r Double))
+instance Ring (Computation r Double (D r Double)) (Computation r Double (D r Double)) r Double
 
-instance Ring (Computation r Float (D r Float)) (Computation r Float (D r Float))
+instance Ring (Computation r Float (D r Float)) (Computation r Float (D r Float)) r Float
 
 
 -- | CRing is a Ring with Multiplicative Commutation.  It arises often due to '*' being defined as a multiplicative commutative operation.
-class (Multiplicative a b, Ring a b) =>
-      CRing a b
+class (Multiplicative a b r t, Ring a b r t) =>
+      CRing a b r t
 
-instance CRing (D r Double) (D r Double)
+instance CRing (D r Double) (D r Double) r Double
 
-instance CRing (Computation r Double (D r Double)) (D r Double)
+instance CRing (Computation r Double (D r Double)) (D r Double) r Double
 
-instance CRing (D r Double) (Computation r Double (D r Double))
+instance CRing (D r Double) (Computation r Double (D r Double)) r Double
 
-instance CRing (D r Float) (D r Float)
+instance CRing (D r Float) (D r Float) r Float
 
-instance CRing (D r Float) (Computation r Float (D r Float))
+instance CRing (D r Float) (Computation r Float (D r Float)) r Float
 
-instance CRing (Computation r Float (D r Float)) (D r Float)
+instance CRing (Computation r Float (D r Float)) (D r Float) r Float
 
-instance CRing (Computation r Double (D r Double)) (Computation r Double (D r Double))
+instance CRing (Computation r Double (D r Double)) (Computation r Double (D r Double)) r Double
 
-instance CRing (Computation r Float (D r Float)) (Computation r Float (D r Float))
+instance CRing (Computation r Float (D r Float)) (Computation r Float (D r Float)) r Float
 
 -- | StarSemiring
 --
 -- > star a = one + a `times` star a
 --
-class ( Semiring a a
-      , MultiplicativeUnital a
-      , MultiplicativeUnital a
-      , MultiplicativeMagma a (CodomainU a)
-      , Additive a (CodomainU a)
-      , Additive a a)
+class ( Semiring a a r t
+      , MultiplicativeUnital a r t
+      , MultiplicativeMagma a ( Computation r t (D r t)) r t
+      , Additive a ( Computation r t (D r t)) r t
+      , Additive a a r t)
      =>
-      StarSemiring a  where
-  star :: a -> CodomainU a
+      StarSemiring a r t where
+  star :: a -> Computation r t (D r t)
   star a = (one :: a) + plus' a
-  plus' :: a -> CodomainU a
+  plus' :: a ->  Computation r t (D r t)
   plus' a = a `times` star a
 
 -- | KleeneAlgebra
@@ -128,5 +127,5 @@ class ( Semiring a a
 -- > a `times` x + x = a ==> star a `times` x + x = x
 -- > x `times` a + x = a ==> x `times` star a + x = x
 --
-class (StarSemiring a, StarSemiring b, AdditiveIdempotent a b) =>
-      KleeneAlgebra a b
+class (StarSemiring a r t, StarSemiring b r t, AdditiveIdempotent a b r t) =>
+      KleeneAlgebra a b r t

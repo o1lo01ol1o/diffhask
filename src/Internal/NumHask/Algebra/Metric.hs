@@ -29,28 +29,28 @@ import Protolude
 -- > abs a * sign a == a
 --
 -- Generalising this class tends towards size and direction (abs is the size on the one-dim number line of a vector with its tail at zero, and sign is the direction, right?).
-class (MultiplicativeUnital a) =>
-      Signed a where
-  sign :: a -> CodomainU a 
-  abs :: a -> CodomainU a 
+class (MultiplicativeUnital a  r t) =>
+      Signed a  r t where
+  sign :: a -> Computation r t (D r t) 
+  abs :: a -> Computation r t (D r t)
 
 data Abs = Abs deriving P.Show 
 
-instance Signed (D r Double) where
+instance Signed (D r Double) r Double where
   sign a =
     if a >= zero
       then one
       else negate (one :: D r Double)
   abs = monOp Abs
 
-instance Signed (D r Float) where
+instance Signed (D r Float) r Float where
   sign a =
     if a >= zero
       then one
       else negate (one :: D r Float)
   abs =  monOp Abs
 
-instance Signed (Computation r Double (D r Double)) where
+instance Signed (Computation r Double (D r Double)) r Double where
   sign a = do
     ca <- a
     if ca >= (zero :: (D r Double))
@@ -60,7 +60,7 @@ instance Signed (Computation r Double (D r Double)) where
     ca <- a
     monOp Abs ca
 
-instance Signed (Computation r Float (D r Float))  where
+instance Signed (Computation r Float (D r Float)) r Float where
   sign a = do
     ca <- a
     if ca >= zero
@@ -74,11 +74,10 @@ instance Signed (Computation r Float (D r Float))  where
 -- | Abs
 --  compute $ diff' abs a
 -- (D 3.0, D 1.0)
-instance ( Signed (D r a), AdditiveUnital (D r a), AdditiveInvertible (D r a), P.Ord a, Multiplicative (D r a) (Computation r a (D r a))
+instance (P.Num a, Signed (D r a) r a, AdditiveUnital (D r a) r a, AdditiveInvertible (D r a) r a, P.Ord a, Multiplicative (D r a) (Computation r a (D r a)) r a
          ) =>
-         MonOp Abs a where
-  {-# INLINE ff #-}
-  ff _ a = P.abs a
+         MonOp Abs r a where
+
   {-# INLINE fd #-}
   fd _ a =
     if a >= (zero :: D r a)
@@ -86,9 +85,12 @@ instance ( Signed (D r a), AdditiveUnital (D r a), AdditiveInvertible (D r a), P
       else monOp Negate a
   {-# INLINE df #-}
   df _ _ ap at = at * sign ap
+  
+instance (P.Num a) => FfMon Abs a where
+  {-# INLINE ff #-}
+  ff _ a = P.abs a
 
-
-instance (Signed (D r a),  Multiplicative (D r a) (D r a)) => Trace Abs a where
+instance (Signed (D r a) r a,  Multiplicative (D r a) (D r a) r a) => Trace Abs r a where
   pushEl (U _ a) dA = do
     sp <-  sign (p a)
     dl <- dA * sp
@@ -96,19 +98,19 @@ instance (Signed (D r a),  Multiplicative (D r a) (D r a)) => Trace Abs a where
   resetEl (U _ a ) = P.pure [a]
 
 -- | Like Signed, except the codomain can be different to the domain.
-class Normed a where
-  size :: a -> CodomainU a
+class Normed a r t | a -> r, a -> t where
+  size :: a -> Computation r t (D r t)
 
-instance Normed (D r Double) where
+instance Normed (D r Double) r Double where
   size = abs
 
-instance Normed (D r Float) where
+instance Normed (D r Float) r Float where
   size = abs
 
-instance Normed (Computation r Double (D r Double)) where
+instance Normed (Computation r Double (D r Double)) r Double where
   size = abs
 
-instance Normed (Computation r Float (D r Float)) where
+instance Normed (Computation r Float (D r Float)) r Float where
   size = abs
 
 -- | distance between numbers
@@ -118,53 +120,51 @@ instance Normed (Computation r Float (D r Float)) where
 -- > \a b c -> distance a c + distance b c - distance a b >= zero &&
 -- >           distance a b + distance b c - distance a c >= zero &&
 -- >           distance a b + distance a c - distance b c >= zero &&
-class Metric a b where
-  distance :: a -> b -> CodomainB a b
+class Metric a b r t | a -> r, a -> t, b -> r, b -> t, a b -> r, a b -> t where
+  distance :: a -> b -> Computation r t (D r t)
 
-instance Metric (D r Double) (D r Double) where
+instance Metric (D r Double) (D r Double) r Double where
   distance a b = abs (a - b)
 
-instance Metric (D r Float) (D r Float)  where
+instance Metric (D r Float) (D r Float) r Float where
   distance a b = abs (a - b)
 
-instance Metric (Computation r Double (D r Double)) (Computation r Double (D r Double)) where
+instance Metric (Computation r Double (D r Double)) (Computation r Double (D r Double)) r Double where
   distance a b = abs (a - b)
 
-instance Metric (Computation r Float (D r Float)) (Computation r Float (D r Float)) where
+instance Metric (Computation r Float (D r Float)) (Computation r Float (D r Float)) r Float where
   distance a b = abs (a - b)
 
-instance Metric (D r Double) (Computation r Double (D r Double)) where
+instance Metric (D r Double) (Computation r Double (D r Double)) r Double where
   distance a b = abs (a - b)
 
-instance Metric (D r Float) (Computation r Float (D r Float)) where
+instance Metric (D r Float) (Computation r Float (D r Float)) r Float where
   distance a b = abs (a - b)
 
-instance Metric (Computation r Double (D r Double)) (D r Double) where
+instance Metric (Computation r Double (D r Double)) (D r Double) r Double where
   distance a b = abs (a - b)
 
-instance Metric (Computation r Float (D r Float)) (D r Float) where
+instance Metric (Computation r Float (D r Float)) (D r Float) r Float where
   distance a b = abs (a - b)
 
 
 -- | todo: This should probably be split off into some sort of alternative Equality logic, but to what end?
-class (AdditiveGroup a b) =>
-      Epsilon a b where
-  nearZero :: (a ~ c, b ~ c) => c -> Computation r t (Bool)
+class (AdditiveGroup a b r t) =>
+      Epsilon a b r t where
+  nearZero :: (c ~ a, c ~ b) => c -> Computation r t (Bool)
   aboutEqual :: a -> b -> Computation r t (Bool)
-  positive :: (a ~ c, b ~ c, Eq c, Signed c t) => c -> Computation r t (Bool)
-  veryPositive ::
-       (a ~ c, b ~ c, Eq c, Signed c t) => c -> Computation r t (Bool)
-  veryNegative ::
-       (a ~ c, b ~ c, Eq c, Signed c t) => c -> Computation r t (Bool)
+  positive :: (c ~ a, c ~ b) => c -> Computation r t (Bool)
+  veryPositive :: (c ~ a, c ~ b) => c -> Computation r t (Bool)
+  veryNegative :: (c ~ a, c ~ b) => c -> Computation r t (Bool)
   
 
 infixl 4 ≈
 
 -- | todo: is utf perfectly acceptable these days?
-(≈) :: (Epsilon a b ) => a -> b -> Computation r t (Bool)
+(≈) :: (Epsilon a b r t ) => a -> b -> Computation r t (Bool)
 (≈) = aboutEqual
 
-instance Epsilon (D r Double) (D r Double) where
+instance (P.Eq (Computation r Double (D r Double))) => Epsilon (D r Double) (D r Double) r Double where
   nearZero a = do
     ca <- abs a
     P.pure (ca <= (D 1e-12 :: D r Double))
@@ -181,7 +181,7 @@ instance Epsilon (D r Double) (D r Double) where
     pa <- positive a
     P.pure $ P.not na P.|| pa
 
-instance Epsilon (D r Float) (D r Float) where
+instance (P.Eq (Computation r Float (D r Float))) => Epsilon (D r Float) (D r Float) r Float where
   nearZero a = do
     ca <- abs a
     P.pure (ca <= (D 1e-6 :: D r Float))
@@ -198,7 +198,7 @@ instance Epsilon (D r Float) (D r Float) where
     pa <- positive a
     P.pure $ P.not na P.|| pa
 
-instance Epsilon (Computation r Double (D r Double)) (Computation r Double (D r Double)) where
+instance (P.Eq (Computation r Double (D r Double))) => Epsilon (Computation r Double (D r Double)) (Computation r Double (D r Double)) r Double where
   nearZero a = do
     ca <- abs a
     P.pure (ca <= (D 1e-12 :: D r Double))
@@ -213,7 +213,7 @@ instance Epsilon (Computation r Double (D r Double)) (Computation r Double (D r 
     pa <- positive a
     P.pure $ P.not na P.|| pa
 
-instance Epsilon (Computation r Float (D r Float)) (Computation r Float (D r Float)) where
+instance (P.Eq (Computation r Float (D r Float))) => Epsilon (Computation r Float (D r Float)) (Computation r Float (D r Float)) r Float where
   nearZero a = do
     ca <- abs a
     P.pure (ca <= (D 1e-6 :: D r Float))
@@ -228,7 +228,7 @@ instance Epsilon (Computation r Float (D r Float)) (Computation r Float (D r Flo
     pa <- positive a
     P.pure $ P.not na P.|| pa
 
-instance Epsilon (D r Double) (Computation r Double (D r Double)) where
+instance (P.Eq (Computation r Double (D r Double))) => Epsilon (D r Double) (Computation r Double (D r Double)) r Double where
   nearZero a = do
     ca <- abs a
     P.pure (ca <= (D 1e-12 :: D r Double))
@@ -245,7 +245,7 @@ instance Epsilon (D r Double) (Computation r Double (D r Double)) where
     pa <- positive a
     P.pure $ P.not na P.|| pa
 
-instance Epsilon (D r Float) (Computation r Float (D r Float)) where
+instance (P.Eq (Computation r Float (D r Float))) => Epsilon (D r Float) (Computation r Float (D r Float)) r Float where
   nearZero a = do
     ca <- abs a
     P.pure (ca <= (D 1e-6 :: D r Float))
@@ -262,7 +262,7 @@ instance Epsilon (D r Float) (Computation r Float (D r Float)) where
     pa <- positive a
     P.pure $ P.not na P.|| pa
 
-instance Epsilon (Computation r Double (D r Double)) (D r Double) where
+instance (P.Eq (Computation r Double (D r Double))) => Epsilon (Computation r Double (D r Double)) (D r Double) r Double where
   nearZero a = do
     ca <- abs a
     P.pure (ca <= (D 1e-12 :: D r Double))
@@ -277,7 +277,7 @@ instance Epsilon (Computation r Double (D r Double)) (D r Double) where
     pa <- positive a
     P.pure $ P.not na P.|| pa
 
-instance Epsilon (Computation r Float (D r Float)) (D r Float) where
+instance (P.Eq (Computation r Float (D r Float))) => Epsilon (Computation r Float (D r Float)) (D r Float) r Float where
   nearZero a = do
     ca <- abs a
     P.pure (ca <= (D 1e-6 :: D r Float))

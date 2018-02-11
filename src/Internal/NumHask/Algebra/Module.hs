@@ -18,7 +18,6 @@ module Internal.NumHask.Algebra.Module
   , Hilbert(..)
   , type (><)
   , TensorProduct(..)
-  , AdditiveBoxModule(..)
   ) where
 
 import           Internal.Internal
@@ -40,12 +39,12 @@ import           Protolude                               (Double, Float, Int,
 -- > (a + b) .+ c == (a .+ c) + b
 -- > a .+ zero == a
 -- > a .+ b == b +. a
-class (Additive a b, r ~ DomainArr(Domains a b)) =>
-      AdditiveModule r a b where
+class (Additive a b r t) =>
+      AdditiveModule r a b t where
   infixl 6 .+
-  (.+) ::  a -> b -> CodomainB a b
+  (.+) ::  a -> b -> Computation r t (D r t)
   infixl 6 +.
-  (+.) :: a -> b -> CodomainB a b
+  (+.) :: a -> b -> Computation r t (D r t)
 
 
 -- | Subtraction Module Laws
@@ -54,12 +53,12 @@ class (Additive a b, r ~ DomainArr(Domains a b)) =>
 -- > (a + b) .- c == (a .- c) + b
 -- > a .- zero == a
 -- > a .- b == negate b +. a
-class (AdditiveGroup a b, AdditiveModule r a b, r ~ DomainArr(Domains a b)) =>
-      AdditiveGroupModule r a b where
+class (AdditiveGroup a b r t) =>
+      AdditiveGroupModule r a b t where
   infixl 6 .-
-  (.-) ::  a -> b -> CodomainB a b
+  (.-) ::  a -> b -> Computation r t (D r t)
   infixl 6 -.
-  (-.) ::   a -> b -> CodomainB a b
+  (-.) ::   a -> b -> Computation r t (D r t)
 
 -- | Multiplicative Module Laws
 --
@@ -68,36 +67,30 @@ class (AdditiveGroup a b, AdditiveModule r a b, r ~ DomainArr(Domains a b)) =>
 -- > c *. (a + b) == (c *. a) + (c *. b)
 -- > a .* zero == zero
 -- > a .* b == b *. a
-class (Multiplicative a b, r ~ DomainArr(Domains a b)) =>
-      MultiplicativeModule r a b where
+class (Multiplicative a b r t) =>
+      MultiplicativeModule r a b t where
   infixl 7 .*
-  (.*) ::  a -> b -> CodomainB a b
+  (.*) ::  a -> b -> Computation r t (D r t)
   infixl 7 *.
-  (*.) ::  a -> b -> CodomainB a b
+  (*.) ::  a -> b -> Computation r t (D r t)
 
 -- | Division Module Laws
 --
 -- > nearZero a || a ./ one == a
 -- > b == zero || a ./ b == recip b *. a
-class (MultiplicativeGroup a b, MultiplicativeModule r a b, r ~ DomainArr(Domains a b)) =>
-      MultiplicativeGroupModule r a b where
+class (MultiplicativeGroup a b r t) =>
+      MultiplicativeGroupModule r a b t where
   infixl 7 ./
-  (./) ::  a -> b -> CodomainB a b
+  (./) :: a -> b -> Computation r t (D r t)
   infixl 7 /.
-  (/.) ::  a -> b -> CodomainB a b
+  (/.) :: a -> b -> Computation r t (D r t)
 
 -- | Banach (with Norm) laws form rules around size and direction of a number, with a potential crossing into another codomain.
 --
 -- > a == singleton zero || normalize a *. size a == a
-class ( ExpField a
-      , Normed  a
-      , MultiplicativeGroupModule r a a, r ~ DomainArr(Domains a b)
-      ) =>
-      Banach r a where
-  normalize ::
-       (Normed a )
-    => a
-    -> CodomainU a
+class (ExpField a r t, Normed a r t, MultiplicativeGroupModule r a a t) =>
+      Banach r a t where
+  normalize :: (Normed a r t, MultiplicativeGroupModule r a (Computation r t (D r t)) t) => a -> Computation r t (D r t)
   normalize a = a ./ size a
 
 -- | the inner product of a representable over a semiring
@@ -106,13 +99,10 @@ class ( ExpField a
 -- > a <.> (b +c) == a <.> b + a <.> c
 -- > a <.> (s *. b + c) == s * (a <.> b) + a <.> c
 -- (s0 *. a) <.> (s1 *. b) == s0 * s1 * (a <.> b)
-class (Semiring a b, r ~ DomainArr(Domains a b)) =>
-      Hilbert r a b where
+class (Semiring a b r t) =>
+      Hilbert r a b t where
   infix 8 <.>
-  (<.>) ::
-     a
-    -> b
-    -> CodomainB a b
+  (<.>) :: a -> b -> Computation r t (D r t)
 
 -- | tensorial type
 type family (><) (a :: k1) (b :: k2) :: *

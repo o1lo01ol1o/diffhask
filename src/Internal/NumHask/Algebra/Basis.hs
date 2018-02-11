@@ -25,18 +25,18 @@ import Internal.Internal
 -- > zero .+. a = a
 -- > a .+. zero = a
 -- > a .+. b == b .+. a
-class (Additive a b, r ~ DomainArr(Domains a b)) =>
-      AdditiveBasis a b r  where
+class (Additive a b r t) =>
+      AdditiveBasis r a b t where
   infixl 7 .+.
-  (.+.) :: a -> b -> CodomainB a b
+  (.+.) :: a -> b -> Computation r t (D r t)
 
 -- | element by element subtraction
 --
 -- > a .-. a = singleton zero
-class (AdditiveGroup a b, r ~ DomainArr(Domains a b) ) =>
-      AdditiveGroupBasis a b r where
+class (AdditiveGroup a b r t ) =>
+      AdditiveGroupBasis r a b t where
   infixl 6 .-.
-  (.-.) :: a -> b -> CodomainB a b
+  (.-.) :: a -> b -> Computation r t (D r t)
 
 -- | element by element multiplication
 --
@@ -44,18 +44,18 @@ class (AdditiveGroup a b, r ~ DomainArr(Domains a b) ) =>
 -- > singleton one .*. a = a
 -- > a .*. singelton one = a
 -- > a .*. b == b .*. a
-class (Multiplicative a b, r ~ DomainArr(Domains a b) ) =>
-      MultiplicativeBasis a b r  where
+class (Multiplicative a b  r t) =>
+      MultiplicativeBasis r a b t where
   infixl 7 .*.
-  (.*.) :: a -> b -> CodomainB a b
+  (.*.) :: a -> b -> Computation r t (D r t)
 
 -- | element by element division
 --
 -- > a ./. a == singleton one
-class (MultiplicativeGroup a b, r ~ DomainArr(Domains a b) ) =>
-      MultiplicativeGroupBasis a b r where
+class (MultiplicativeGroup a b r t ) =>
+      MultiplicativeGroupBasis r a b t where
   infixl 7 ./.
-  (./.) :: a -> b -> CodomainB a b
+  (./.) :: a -> b -> Computation r t (D r t)
 
 
 

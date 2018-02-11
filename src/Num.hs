@@ -26,12 +26,12 @@ data FixPoint = FixPoint
 
 fpPush ::
      (P.Ord a)
-  => D a
-  -> D a
-  -> D a
-  -> D a
-  -> D a
-  -> Computation a [(Delta a, D a)]
+  => D r a
+  -> D r a
+  -> D r a
+  -> D r a
+  -> D r a
+  -> Computation a [(D r a, D r a)]
 fpPush b bfirst aprev alast dA = do
   reverseProp dA alast
   eps <- gets (\st -> st ^. fpEps)
@@ -43,11 +43,11 @@ fpPush b bfirst aprev alast dA = do
     go ::
          (P.Ord a)
       => P.Int
-      -> D a
+      -> D r a
       -> P.Int
-      -> D a
-      -> D a
-      -> D a
+      -> D r a
+      -> D r a
+      -> D r a
       -> Computation a ()
     go miter eps oi apr alst d =
       let i = oi P.+ 1
@@ -74,93 +74,99 @@ instance (P.Ord a) => Trace FixPoint a where
 -- >>> let g a b = (a + b / a) / (D 2.0 :: D Float)
 -- >>> compute $ diff' (fixPoint g (D 1.2)) (D 25.0 :: D Float) 
 -- (D 1.0, D 5.0), (D 1.0, D 0.1)
-fixPoint :: (P.Ord a, Trace Noop a) =>(D a -> D a -> Computation a (D a)) -> D a -> D a -> Computation a (D a)
+fixPoint ::
+     (P.Ord a, Trace Noop a)
+  => (D r a -> D r a -> Computation r a (D r a))
+  -> D r a
+  -> D r a
+  -> Computation r a (D r a)
 fixPoint g a0 b = do
   eps <- gets (\st -> st ^. fpEps)
   mxitr <- gets (\st -> st ^. maxFpIter)
   case b of
     D _ -> goD g (D eps) mxitr 1 a0 b
+    Dm _ -> goD g (D eps) mxitr 1 a0 b
     DF _ _ bi -> goDF g (D eps) mxitr 1 a0 b bi
     DR bp _ bi _ -> goDR g (D eps) mxitr 1 a0 b bi bp
   where
     goD ::
          (P.Ord a)
-      => (D a -> D a -> Computation a (D a))
-      -> D a
+      => (D r a -> D r a -> Computation r a (D r a))
+      -> D r a
       -> P.Int
       -> P.Int
-      -> D a
-      -> D a
-      -> Computation a (D a)
+      -> D r a
+      -> D r a
+      -> Computation r a (D r a)
     goD g e m i a b =
       let ni = i P.+ 1
       in if ni P.>= m
            then pure a
            else do
-                aa <- g a b
-                d <- aa - a
-                ad <- abs d
-                if ad P.<= e
-                     then pure a
-                     else goD g e m ni aa b
+             aa <- g a b
+             d <- aa - a
+             ad <- abs d
+             if ad P.<= e
+               then pure a
+               else goD g e m ni aa b
     goDF ::
          (P.Ord a)
-      => (D a -> D a -> Computation a (D a))
-      -> D a
+      => (D r a -> D r a -> Computation r a (D r a))
+      -> D r a
       -> P.Int
       -> P.Int
-      -> D a
-      -> D a
+      -> D r a
+      -> D r a
       -> Tag
-      -> Computation a (D a)
+      -> Computation r a (D r a)
     goDF g e m i a b bi =
       let ni = i P.+ 1
       in if ni P.>= m
            then do
-                cta <- t a
-                pure P.$ DF (p a) (cta) bi
+             cta <- t a
+             pure P.$ DF (p a) (cta) bi
            else do
-                aa <- g a b
-                ps <- ( p aa) - (p a)
-                arg <- abs (ps)
-                cta <- t aa
-                td <- cta - t a
-                if (arg P.<= e)  P.&& (td P.<= e)
-                     then do
-                     cta <- t a
-                     pure P.$ DF (p a) (cta) bi
-                     else goDF g e m ni aa b bi
+             aa <- g a b
+             ps <- (p aa) - (p a)
+             arg <- abs (ps)
+             cta <- t aa
+             td <- cta - t a
+             if (arg P.<= e) P.&& (td P.<= e)
+               then do
+                 cta <- t a
+                 pure P.$ DF (p a) (cta) bi
+               else goDF g e m ni aa b bi
     drFin ::
-         ( Trace Noop a, P.Ord a)
-      => (D a -> D a -> Computation a (D a))
-      -> D a
+         (Trace Noop a, P.Ord a)
+      => (D r a -> D r a -> Computation r a (D r a))
+      -> D r a
       -> Tag
-      -> D a
-      -> D a
-      -> Computation a (D a)
+      -> D r a
+      -> D r a
+      -> Computation r a (D r a)
     drFin g a bi bfirst b = do
       aprev <- r (p a) (N Noop) bi
       alast <- g aprev bfirst
       r (p a) (FxP FixPoint (b, bfirst, aprev, alast)) bi
     goDR ::
-         (P.Ord a,Trace Noop a)
-      => (D a -> D a -> Computation a (D a))
-      -> D a
+         (P.Ord a, Trace Noop a)
+      => (D r a -> D r a -> Computation r a (D r a))
+      -> D r a
       -> P.Int
       -> P.Int
-      -> D a
-      -> D a
+      -> D r a
+      -> D r a
       -> Tag
-      -> D a
-      -> Computation a (D a)
+      -> D r a
+      -> Computation r a (D r a)
     goDR g e m i a b bi bfirst =
       let ni = i P.+ 1
       in if ni P.>= m
            then drFin g a bi bfirst b
            else do
-                aa <- g a b
-                d <- aa - a
-                ad <- abs d
-                if ad P.<= e
-                     then drFin g a bi bfirst b
-                     else goDR g e m ni aa b bi bfirst
+             aa <- g a b
+             d <- aa - a
+             ad <- abs d
+             if ad P.<= e
+               then drFin g a bi bfirst b
+               else goDR g e m ni aa b bi bfirst

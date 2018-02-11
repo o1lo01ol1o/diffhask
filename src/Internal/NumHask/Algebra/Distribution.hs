@@ -19,21 +19,21 @@ import           Protolude                               (Double, Float)
 -- > (a + b) * c == a * c + b * c
 -- > a * zero == zero
 -- > zero * a == zero
-class (Additive a b, MultiplicativeMagma a b) =>
-      Distribution a b
+class (Additive a b r t, MultiplicativeMagma a b r t) =>
+      Distribution a b r t
 
-instance Distribution (D r Double) (D r Double)
+instance Distribution (D r Double) (D r Double) r Double
 
-instance Distribution (Computation r Double (D r Double)) (D r Double)
+instance Distribution (Computation r Double (D r Double)) (D r Double) r Double
 
-instance Distribution (D r Double) (Computation r Double (D r Double))
+instance Distribution (D r Double) (Computation r Double (D r Double)) r Double
 
-instance Distribution (D r Float) (D r Float)
+instance Distribution (D r Float) (D r Float) r Float
 
-instance Distribution (D r Float) (Computation r Float (D r Float))
+instance Distribution (D r Float) (Computation r Float (D r Float)) r Float
 
-instance Distribution (Computation r Float (D r Float)) (D r Float)
+instance Distribution (Computation r Float (D r Float)) (D r Float) r Float
 
-instance Distribution (Computation r Double (D r Double)) (Computation r Double (D r Double))
+instance Distribution (Computation r Double (D r Double)) (Computation r Double (D r Double)) r Double
 
-instance Distribution (Computation r Float (D r Float)) (Computation r Float (D r Float))
+instance Distribution (Computation r Float (D r Float)) (Computation r Float (D r Float)) r Float

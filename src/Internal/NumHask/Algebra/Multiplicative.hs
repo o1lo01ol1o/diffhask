@@ -26,7 +26,8 @@ module Internal.NumHask.Algebra.Multiplicative
 import           Internal.Internal
 import           Internal.NumHask.Algebra.Additive
 import           Protolude                         (Bool (..), Double, Float,
-                                                    Int, Integer, pure, ($), Show)
+                                                    Int, Integer, Show, pure,
+                                                    ($))
 import qualified Protolude                         as P
 
 data Multiply = Multiply deriving Show
@@ -38,61 +39,61 @@ data Divide = Divide deriving Show
 -- > ∀ a,b ∈ A: a `times` b ∈ A
 --
 -- law is true by construction in Haskell
-class (BinaryComputation a b) => MultiplicativeMagma a b  where
-  times :: a -> b -> CodomainB a b
+class MultiplicativeMagma a b r t | a b -> t, a -> t, b -> t, a -> r, b -> r, a b -> r where
+  times :: a -> b -> Computation r t (D r t)
 
-instance MultiplicativeMagma (Computation r Float (D r Float)) (Computation r Float (D r Float))  where
+instance MultiplicativeMagma (Computation r Float (D r Float)) (Computation r Float (D r Float))r Float where
   times a b = do
     aa <- a
     bb <- b
     binOp Multiply aa bb
 
-instance MultiplicativeMagma (Computation r Float (D r Float)) (D r Float)  where
+instance MultiplicativeMagma (Computation r Float (D r Float)) (D r Float)r Float where
   times a b = do
     aa <- a
     binOp Multiply aa b
 
-instance MultiplicativeMagma (D r Float) (Computation r Float (D r Float))  where
+instance MultiplicativeMagma (D r Float) (Computation r Float (D r Float))r Float where
   times a b = do
     bb <- b
     binOp Multiply a bb
 
-instance MultiplicativeMagma (D r Float) (D r Float)  where
+instance MultiplicativeMagma (D r Float) (D r Float)r Float where
   times = binOp Multiply
 
 
-instance MultiplicativeMagma (Computation r Double (D r Double)) (Computation r Double (D r Double))  where
+instance MultiplicativeMagma (Computation r Double (D r Double)) (Computation r Double (D r Double)) r Double where
   times a b = do
     aa <- a
     bb <- b
     binOp Multiply aa bb
 
-instance MultiplicativeMagma (Computation r Double (D r Double)) (D r Double)  where
+instance MultiplicativeMagma (Computation r Double (D r Double)) (D r Double) r Double where
   times a b = do
     aa <- a
     binOp Multiply aa b
 
-instance MultiplicativeMagma (D r Double) (Computation r Double (D r Double))  where
+instance MultiplicativeMagma (D r Double) (Computation r Double (D r Double)) r Double where
   times a b = do
     bb <- b
     binOp Multiply a bb
 
-instance MultiplicativeMagma (D r Double) (D r Double)  where
+instance MultiplicativeMagma (D r Double) (D r Double) r Double where
   times = binOp Multiply
 
 instance (P.Num a) => FFBin Multiply a where
   {-# INLINE ff_bin #-}
   ff_bin _ a b =  b P.* a
 
-instance (P.Num a, Multiplicative (D r a) (D r a)) => DfDaBin Multiply r (D r a) a where
+instance (P.Num t, Multiplicative (D r t) (D r t) r t) => DfDaBin Multiply r (D r t) t where
   {-# INLINE df_da #-}
   df_da _ b _ _ at = binOp Multiply at b
 
-instance ( P.Num a, Multiplicative (D r a) (D r a)) => DfDbBin Multiply r (D r a) a where
+instance ( P.Num t, Multiplicative (D r t) (D r t) r t) => DfDbBin Multiply r (D r t) t where
   {-# INLINE df_db #-}
   df_db _ a _ _ bt = binOp Multiply bt a
 
-instance ( P.Num a, Multiplicative (D r a) (D r a)  ) => BinOp Multiply r (D r a) (D r a) a  where
+instance ( P.Num t, Multiplicative (D r t) (D r t) r t ) => BinOp Multiply r (D r t) (D r t) t  where
   {-# INLINE fd_bin #-}
   fd_bin _ a b =  binOp Multiply a b
   {-# INLINE df_dab #-}
@@ -101,7 +102,7 @@ instance ( P.Num a, Multiplicative (D r a) (D r a)  ) => BinOp Multiply r (D r a
     b <- (binOp Multiply ap bt)
     binOp Add a b
 
-instance ( Multiplicative (D r a) (D r a) ) => Trace Multiply r a where
+instance ( Multiplicative (D r t) (D r t) r t ) => Trace Multiply r t where
   pushEl (B _ a b) dA = do
     cdA <- pure dA
     opa <- cdA * p b
@@ -116,80 +117,79 @@ instance ( Multiplicative (D r a) (D r a) ) => Trace Multiply r a where
 --
 -- > one `times` a == a
 -- > a `times` one == a
-class MultiplicativeMagma a a =>
-      MultiplicativeUnital a  where
+class MultiplicativeMagma a a r t=>
+      MultiplicativeUnital a r t where
   one :: a
 
-instance MultiplicativeUnital (D r Double)  where
+instance MultiplicativeUnital (D r Double) r Double where
   one = D 1
 
-instance MultiplicativeUnital  (D r Float)  where
+instance MultiplicativeUnital  (D r Float) r Float where
   one = D 1
 
-instance MultiplicativeUnital  (Computation r Double (D r Double))  where
+instance MultiplicativeUnital  (Computation r Double (D r Double)) r Double where
   one = P.pure P.$ D 1
 
-instance MultiplicativeUnital (Computation r Float (D r Float))  where
+instance MultiplicativeUnital (Computation r Float (D r Float)) r Float where
   one = P.pure P.$ D 1
 
 
 -- | Associative magma for multiplication.
 --
 -- > (a `times` b) `times` c == a `times` (b `times` c)
-class MultiplicativeMagma a a =>
-      MultiplicativeAssociative a
+class MultiplicativeMagma a a r t=>
+      MultiplicativeAssociative a r t
 
-instance MultiplicativeAssociative (D r Double)
+instance MultiplicativeAssociative (D r Double) r Double
 
-instance MultiplicativeAssociative (D r Float)
+instance MultiplicativeAssociative (D r Float) r Float
 
-instance MultiplicativeAssociative (Computation r Float (D r Float))
+instance MultiplicativeAssociative (Computation r Float (D r Float)) r Float
 
-instance MultiplicativeAssociative (Computation r Double (D r Double))
+instance MultiplicativeAssociative (Computation r Double (D r Double)) r Double
 
 
 -- | Commutative magma for multiplication.
 --
 -- > a `times` b == b `times` a
-class MultiplicativeMagma a a =>
-      MultiplicativeCommutative a 
+class MultiplicativeMagma a a r t =>
+      MultiplicativeCommutative a r t
 
-instance MultiplicativeCommutative (D r Double)
+instance MultiplicativeCommutative (D r Double) r Double
 
-instance MultiplicativeCommutative (D r Float)
+instance MultiplicativeCommutative (D r Float) r Float
 
-instance MultiplicativeCommutative (Computation r Float (D r Float))
+instance MultiplicativeCommutative (Computation r Float (D r Float)) r Float
 
-instance MultiplicativeCommutative (Computation r Double (D r Double))
+instance MultiplicativeCommutative (Computation r Double (D r Double)) r Double
 
 -- | Invertible magma for multiplication.
 --
 -- > ∀ a ∈ A: recip a ∈ A
 --
 -- law is true by construction in Haskell
-class ( MultiplicativeMagma a a
-      , AdditiveGroup a a
-      , AdditiveGroup (DomainElem (Domain a)) (DomainElem (Domain a))
+class ( MultiplicativeMagma a a r t
+      , AdditiveGroup a a r t
       ) =>
-      MultiplicativeInvertible a where
-  recip :: a -> CodomainU a
+      MultiplicativeInvertible a r t where
+  recip :: a -> Computation r t (D r t)
 
-instance (AdditiveGroup Double Double, Multiplicative Double Double) =>
-         MultiplicativeInvertible (D r Double) where
+instance
+         MultiplicativeInvertible (D r Double) r Double where
   recip = binOp Divide one
 
-instance (AdditiveGroup Float Float, Multiplicative Float Float) =>
-         MultiplicativeInvertible (D r Float) where
+instance
+         MultiplicativeInvertible (D r Float) r Float where
   recip = binOp Divide one
 
-instance (AdditiveGroup Double Double, Multiplicative Double Double) =>
-         MultiplicativeInvertible (Computation r Double (D r Double)) where
+instance
+         MultiplicativeInvertible (Computation r Double (D r Double)) r Double where
   recip a = do
     aa <- a
     binOp Divide one aa
 
-instance (AdditiveGroup Float Float, Multiplicative Float Float) =>
-         MultiplicativeInvertible (Computation r Float (D r Float)) where
+instance
+         MultiplicativeInvertible (Computation r Float (D r Float)) r Float where
   recip a = do
     aa <- a
     binOp Divide one aa
@@ -198,46 +198,42 @@ instance (P.Num a, P.Fractional a) => FFBin Divide a where
   {-# INLINE ff_bin #-}
   ff_bin _ a b = b P./ a
 
-instance ( P.Fractional a
-         , AdditiveGroup a a
-         , AdditiveGroup (D r a) (D r a)
-         , Multiplicative (D r a) (D r a)
-         , MultiplicativeGroup (D r a) (D r a)
-         , MultiplicativeGroup (Computation r a (D r a)) (D r a)
-         , Multiplicative (D r a) (Computation r a (D r a))
-         , Multiplicative a a
+instance ( P.Fractional t
+         , AdditiveGroup (D r t) (D r t) r t
+         , Multiplicative (D r t) (D r t) r t
+         , MultiplicativeGroup (D r t) (D r t) r t
+         , MultiplicativeGroup (Computation r t (D r t)) (D r t) r t
+         , Multiplicative (D r t) (Computation r t (D r t)) r t
          ) =>
-         DfDaBin Divide r (D r a) a where
+         DfDaBin Divide r (D r t) t where
   {-# INLINE df_da #-}
   df_da _ b _ _ at = binOp Divide at b
 
-instance ( P.Fractional a
-         , AdditiveGroup a a
-         , AdditiveGroup (D r a) (D r a)
-         , Multiplicative (D r a) (D r a)
-         , AdditiveInvertible (D r a)
-         , Multiplicative a a
-         , MultiplicativeGroup (Computation r a (D r a)) (D r a)
-         , Multiplicative (D r a) (Computation r a (D r a))
-         , MultiplicativeGroup (D r a) (D r a)
+instance ( P.Fractional t
+
+         , AdditiveGroup (D r t) (D r t) r t
+         , Multiplicative (D r t) (D r t) r t
+         , AdditiveInvertible (D r t) r t
+
+         , MultiplicativeGroup (Computation r t (D r t)) (D r t) r t
+         , Multiplicative (D r t) (Computation r t (D r t)) r t
+         , MultiplicativeGroup (D r t) (D r t) r t
          ) =>
-         DfDbBin Divide r (D r a) a  where
+         DfDbBin Divide r (D r t) t  where
   {-# INLINE df_db #-}
   df_db _ a cp bp bt = do
     cbt <- (monOp Negate bt)
     ccpbp <- (binOp Divide cp bp)
     binOp Divide cbt ccpbp
 
-instance ( P.Fractional a
-         , Multiplicative a a
-         , AdditiveGroup a a
-         , AdditiveGroup (D r a) (D r a)
-         , Multiplicative (D r a) (D r a)
-         , Multiplicative (D r a) (Computation r a (D r a))
-         , MultiplicativeGroup (D r a) (D r a)
-         , MultiplicativeGroup (Computation r a (D r a)) (D r a)
+instance ( P.Fractional t
+         , AdditiveGroup (D r t) (D r t) r t
+         , Multiplicative (D r t) (D r t) r t
+         , Multiplicative (D r t) (Computation r t (D r t)) r t
+         , MultiplicativeGroup (D r t) (D r t) r t
+         , MultiplicativeGroup (Computation r t (D r t)) (D r t) r t
          ) =>
-         BinOp Divide r (D r a) (D r a) a where
+         BinOp Divide r (D r t) (D r t) t where
   {-# INLINE fd_bin #-}
   fd_bin _ a b = binOp Divide a b
   {-# INLINE df_dab #-}
@@ -246,18 +242,15 @@ instance ( P.Fractional a
     ccp <- binOp Multiply catbt cp
     binOp Divide (ccp) bp
 
-instance ( P.Fractional a
-         , AdditiveGroup a a
-         -- , MultiplicativeGroup a a
-         , Multiplicative a a
-         , Multiplicative (D r a) (Computation r a (D r a))
-         , AdditiveGroup (D r a) (D r a)
-         , MultiplicativeGroup (D r a) (D r a)
-         , MultiplicativeGroup (Computation r a (D r a)) (D r a)
-         , Multiplicative (D r a) (D r a)
-         , AdditiveInvertible (D r a)
+instance ( P.Fractional t
+         , Multiplicative (D r t) (Computation r t (D r t)) r t
+         , AdditiveGroup (D r t) (D r t) r t
+         , MultiplicativeGroup (D r t) (D r t) r t
+         , MultiplicativeGroup (Computation r t (D r t)) (D r t) r t
+         , Multiplicative (D r t) (D r t) r t
+         , AdditiveInvertible (D r t) r t
          ) =>
-         Trace Divide r a where
+         Trace Divide r t where
   pushEl (B _ a b) dA = do
     cdA <- pure dA
     opa <- cdA / p b
@@ -270,20 +263,19 @@ instance ( P.Fractional a
 -- | Idempotent magma for multiplication.
 --
 -- > a `times` a == a
-class MultiplicativeMagma a a =>
-      MultiplicativeIdempotent a 
+class MultiplicativeMagma a a r t=>
+      MultiplicativeIdempotent a r t
 
 -- | product definition avoiding a clash with the Product monoid in base
 --
 product ::
-     ( Multiplicative a a
-     , Multiplicative a (CodomainU a)
-     , MultiplicativeUnital a
+     ( Multiplicative a a r t
+     , Multiplicative a (Computation r t (D r t)) r t
+     , MultiplicativeUnital a r t
      , P.Foldable f
-     , MultiplicativeUnital a
      )
   => f a
-  -> CodomainU a
+  -> Computation r t (D r t)
 product = P.foldr (*) one
 
 -- | Multiplicative is commutative, associative and unital under multiplication
@@ -292,64 +284,65 @@ product = P.foldr (*) one
 -- > a * one == a
 -- > (a * b) * c == a * (b * c)
 -- > a * b == b * a
-class ( MultiplicativeCommutative a
-      , MultiplicativeCommutative b
-      , MultiplicativeUnital a
-      , MultiplicativeUnital b
-      , MultiplicativeMagma a b
-      , MultiplicativeAssociative a 
+class ( MultiplicativeCommutative a r t
+      , MultiplicativeCommutative b r t
+      , MultiplicativeUnital a r t
+      , MultiplicativeUnital b r t
+      , MultiplicativeMagma a b r t
+      , MultiplicativeAssociative a r t
+      , MultiplicativeAssociative b r t
       ) =>
-      Multiplicative a b  where
+      Multiplicative a b r t where
   infixl 7 *
-  (*) :: a -> b -> CodomainB a b
+  (*) :: a -> b -> Computation r t (D r t)
   a * b = times a b
 
-instance Multiplicative (D r Double) (D r Double)
+instance Multiplicative (D r Double) (D r Double) r Double
 
-instance Multiplicative (Computation r Double (D r Double)) (D r Double)
+instance Multiplicative (Computation r Double (D r Double)) (D r Double) r Double
 
-instance Multiplicative (D r Double) (Computation r Double (D r Double))
+instance Multiplicative (D r Double) (Computation r Double (D r Double)) r Double
 
-instance Multiplicative (D r Float) (D r Float)
+instance Multiplicative (D r Float) (D r Float) r Float
 
-instance Multiplicative (D r Float) (Computation r Float (D r Float))
+instance Multiplicative (D r Float) (Computation r Float (D r Float)) r Float
 
-instance Multiplicative (Computation r Float (D r Float)) (D r Float)
+instance Multiplicative (Computation r Float (D r Float)) (D r Float) r Float
 
-instance Multiplicative (Computation r Double (D r Double)) (Computation r Double (D r Double))
+instance Multiplicative (Computation r Double (D r Double)) (Computation r Double (D r Double)) r Double
 
-instance Multiplicative (Computation r Float (D r Float)) (Computation r Float (D r Float)) -- | Non-commutative left divide
+instance Multiplicative (Computation r Float (D r Float)) (Computation r Float (D r Float)) r Float -- | Non-commutative left divide
 --
 -- > recip a `times` a = one
-class ( MultiplicativeUnital a
-      , MultiplicativeAssociative a
-      , MultiplicativeInvertible a
-      , MultiplicativeUnital b
-      , MultiplicativeMagma a b
-      , MultiplicativeMagma (CodomainB a b) a
-      , MultiplicativeAssociative b
-      , MultiplicativeInvertible b
+class ( MultiplicativeUnital a r t
+      , MultiplicativeAssociative a r t
+      , MultiplicativeInvertible a r t
+      , MultiplicativeUnital b r t
+      , MultiplicativeMagma a b r t
+      , MultiplicativeMagma (Computation r t (D r t)) a r t
+      , MultiplicativeAssociative b r t
+      , MultiplicativeInvertible b r t
       ) =>
-      MultiplicativeLeftCancellative a b  where
+      MultiplicativeLeftCancellative a b r t where
   infixl 7 ~/
-  (~/) :: a -> b -> CodomainB a b
+  (~/) :: a -> b -> Computation r t (D r t)
   a ~/ b = recip b `times` a
 
 -- | Non-commutative right divide
 --
 -- > a `times` recip a = one
-class ( MultiplicativeUnital a
-      , MultiplicativeAssociative a
-      , MultiplicativeInvertible a
-      , MultiplicativeUnital b
-      , MultiplicativeMagma a b
-      , MultiplicativeMagma a (CodomainB a b)
-      , MultiplicativeAssociative b
-      , MultiplicativeInvertible b
+class ( MultiplicativeUnital a r t
+      , MultiplicativeAssociative a r t
+      , MultiplicativeInvertible a r t
+      , MultiplicativeUnital b r t
+      , MultiplicativeMagma a b r t
+      , MultiplicativeMagma a (Computation r t (D r t)) r t
+      , MultiplicativeAssociative b r t
+      , MultiplicativeInvertible b r t
       ) =>
-      MultiplicativeRightCancellative a b where
+      MultiplicativeRightCancellative a b r t where
   infixl 7 /~
-  (/~) :: a -> b -> CodomainB a b
+  (/~) :: a -> b -> Computation r t (D r t)
   a /~ b = a `times` recip b
 
 -- | Divide ('/') is reserved for where both the left and right cancellative laws hold.  This then implies that the MultiplicativeGroup is also Abelian.
@@ -358,30 +351,30 @@ class ( MultiplicativeUnital a
 -- > recip a = one / a
 -- > recip a * a = one
 -- > a * recip a = one
-class ( Multiplicative a b
-      , MultiplicativeInvertible a
-      , MultiplicativeInvertible b
-      , MultiplicativeMagma a b
-      , MultiplicativeMagma a (CodomainB a b)
+class ( Multiplicative a b r t
+      , MultiplicativeInvertible a r t
+      , MultiplicativeInvertible b r t
+      , MultiplicativeMagma a b r t
+      , MultiplicativeMagma a (Computation r t (D r t)) r t
       ) =>
-      MultiplicativeGroup a b where
+      MultiplicativeGroup a b r t where
   infixl 7 /
-  (/) :: a -> b -> CodomainB a b
+  (/) :: a -> b -> Computation r t (D r t)
   (/) a b = a `times` recip b
 
-instance (AdditiveGroup Double Double, Multiplicative Double Double) => MultiplicativeGroup (D r Double) (D r Double)
+instance MultiplicativeGroup (D r Double) (D r Double) r Double
 
-instance (AdditiveGroup Double Double, Multiplicative Double Double) =>MultiplicativeGroup (Computation r Double (D r Double)) (D r Double)
+instance MultiplicativeGroup (Computation r Double (D r Double)) (D r Double) r Double
 
-instance (AdditiveGroup Double Double, Multiplicative Double Double ) =>MultiplicativeGroup (D r Double) (Computation r Double (D r Double))
+instance MultiplicativeGroup (D r Double) (Computation r Double (D r Double)) r Double
 
-instance (AdditiveGroup Float Float, Multiplicative Float Float) => MultiplicativeGroup (D r Float) (D r Float)
+instance MultiplicativeGroup (D r Float) (D r Float) r Float
 
-instance (AdditiveGroup Float Float, Multiplicative Float Float) => MultiplicativeGroup (D r Float) (Computation r Float (D r Float))
+instance MultiplicativeGroup (D r Float) (Computation r Float (D r Float)) r Float
 
-instance (AdditiveGroup Float Float, Multiplicative Float Float) => MultiplicativeGroup (Computation r Float (D r Float)) (D r Float)
+instance MultiplicativeGroup (Computation r Float (D r Float)) (D r Float) r Float
 
-instance (AdditiveGroup Double Double, Multiplicative Double Double) => MultiplicativeGroup (Computation r Double (D r Double)) (Computation r Double (D r Double))
+instance MultiplicativeGroup (Computation r Double (D r Double)) (Computation r Double (D r Double)) r Double
 
-instance (AdditiveGroup Float Float, Multiplicative Float Float) => MultiplicativeGroup (Computation r Float (D r Float)) (Computation r Float (D r Float))
+instance MultiplicativeGroup (Computation r Float (D r Float)) (Computation r Float (D r Float)) r Float
 

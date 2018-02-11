@@ -10,6 +10,8 @@
 {-# LANGUAGE PolyKinds              #-}
 {-# LANGUAGE TemplateHaskell        #-}
 {-# LANGUAGE TypeFamilies           #-}
+{-# LANGUAGE RankNTypes           #-}
+
 {-# LANGUAGE TypeInType           #-}
 {-# LANGUAGE UndecidableInstances   #-}
 {-# LANGUAGE TypeFamilyDependencies   #-}
@@ -53,18 +55,9 @@ data D r a where
   DF :: Primal r a -> Tangent r a -> Tag -> D r a
   DR :: (Show op) => D r a -> DualTrace op r a -> Tag -> UID -> D r a
 
-class Differentiable a
-
--- instance (Differentiable (D r a))
-
-instance (Differentiable (D r Float))
-instance (Differentiable (D r Double))
-instance (Differentiable (Computation r Float (D r Float)))
-instance (Differentiable (Computation r Double (D r Double)))
-
-instance (Show a, Show Tag, Show UID, Show (r a) ) => Show (D r a) where
-  show (D  a) = "D " ++ show a
-  show (Dm a) = "D " ++ show ( a)
+instance (Show a, Show Tag, Show UID, Show (r a)) => Show (D r a) where
+  show (D a) = "D " ++ show a
+  show (Dm a) = "D " ++ show (a)
   show (DF p t ti) = "DF " ++ show p ++ show t ++ show ti
   show (DR p dt ti uid) = "DR " ++ show p ++ show dt ++ show ti ++ show uid
 
@@ -72,132 +65,6 @@ type Primal r a = D r a
 type Tangent r a = D r a
 
 type FptNode r a = (D r a, D r a, D r a, D r a) -- nodes needed for a fixpoint evaluation
-
--- class AdditiveBox a b t | a b -> t where
---   boxAdd :: a -> b -> Computation r t (D t)
-
--- class AdditiveBoxModule r a t | a -> t where
---   boxModuleAddL :: a -> a -> Computation r t (D r a)
---   boxModuleAddR :: a -> a -> Computation r t (D r a)
-
--- class AdditiveBoxBasis a m t | a -> t where
---   boxBasisAdd :: a -> a -> Computation r t (D r a)
-
--- type ScalarInABox a = (ModuleType (D r a) ~ a, P.Num a, AdditiveBox (D r a) (D r a) a)
-
--- data Contents = Array | Scalar
-
--- data Box a where
---   X
---     :: (AdditiveBox (D r a) (D r a) (ModuleType (D r a)), Domaine (D r a) ~ a)
---     => D r a
---     -> Box (ModuleType (D r a))
---   M
---     :: ( AdditiveBoxModule r (D t) a t
---        , AdditiveBoxModule r a (D t) t
---        , AdditiveBoxBasis (D (r a)) (D (r a)) r t
---        , t ~ ModuleType (D (r a))
---        )
---     => D (r a)
---     -> Box t
-
--- class CDelta a t where
---   data Delta t v
-
--- type family IsScalar a where
---   IsScalar (D (r a)) = 'False
---   IsScalar (Computation r t (D (r t))) = 'False
---   IsScalar (D r a) = 'True
---   IsScalar (Computation r t (D t)) = 'True
-
--- Helper to extract the module parameters while remainting polymorphic with respect to inputs of (D r a) and (Computation r t (D r a)).
--- This could be made more general as an open type family and used in all NumHask signitures to deal with more expressive types of things that should be treated as numbers
--- ie, our state / D r a pair.
-type family Domain a = d | d -> a where
-  Domain (Computation r t (D r t)) = D (DomainArr ((Computation r t (D r t)))) (DomainElem (Computation r t (D r t)))
-  Domain (D r t) = D r t
-  
-
-type family DomainElem a = t where
-  DomainElem (D r t) = t
-  DomainElem (Computation r t (D r t)) = t
-
-type family DomainArr a where
-  DomainArr (D r t) = r
-  DomainArr (Computation r t (D r t)) = r
-
-type family Domains a b where
-  Domains (D r t) _ = D r t
-  Domains (Computation r t (D r t)) _ = D r t
-  Domains _ (Computation r t (D r t)) = D r t
-  Domains _ (D r t) = D r t
-
--- type family Codomain a b where
---   Codomain (D r t) () = Computation r t (D r t)
---   Codomain (Computation r t (D r t)) () = Computation r t (D r t)
---   Codomain (D r t) (D r t) = Computation r t (D r t)
---   Codomain (Computation r t (D r t)) (D r t) = Computation r t (D r t)
---   Codomain (D r t) (Computation r t (D r t)) = Computation r t (D r t)
---   Codomain (Computation r t (D r t)) (Computation r t (D r t)) = Computation r t (D r t)
-
-type family CodomainB a b = c where
-   CodomainB a b = Computation (DomainArr (Domains a b)) (DomainElem (Domains a b)) (Domains a b)
-
-type family CodomainU a where
-   CodomainU a = Computation (DomainArr (Domain a)) (DomainElem (Domain a)) (Domain a)
-
-type UnaryComputation a
-   = ( Domain(CodomainU a) ~ Domain a
-     -- Codomain a () ~ Codomain a (Codomain a ())
-     -- , Codomain a a ~ Codomain a ()
-     -- , Codomain (Codomain a ()) (Codomain a ()) ~ Codomain a ()
-     -- , Domain a ~ Domain (Codomain a ())
-     -- -- , Codomain a () ~ Codomain (Codomain a ()) ()
-     )
-type BinaryComputation a b
-   = ( Domains a b ~ Domain a
-     , Domains a b ~ Domains b a
-     , Domains a b ~ Domain b
-     -- , Domains a a ~ Domain a
-     -- , Domains b b ~ Domain b
-     
-     , Domain( CodomainU a) ~ Domains a b
-     , Domain( CodomainU b) ~ Domains a b
-     , Domain( CodomainB a b) ~ Domains a b
-
-     , Domain( Domain a) ~ Domains a b
-     , Domain( Domain b) ~ Domains a b
-     , Domain( Domains a b) ~ Domains a b
-     , Differentiable a, Differentiable b
-     -- Codomain (Codomain b ()) a ~ Codomain a b
-     -- , Codomain (Codomain a ()) b ~ Codomain a b
-     -- , Codomain b (Codomain a ()) ~ Codomain a b
-     -- , Codomain a (Codomain b ()) ~ Codomain a b
-     -- , Codomain a (Codomain b b) ~ Codomain a b
-     -- , Codomain a (Codomain a a) ~ Codomain a b
-     -- , Codomain b (Codomain a a) ~ Codomain a b
-     -- , Codomain b (Codomain b b) ~ Codomain a b
-     -- , Codomain a b ~ Codomain b a
-     -- , Codomain a b ~ Codomain a a
-     -- , Codomain a b ~ Codomain b b
-     -- , Domains a b ~ Domains b a
-     -- , Domains (Codomain a b) b ~ Domains a b
-     -- , Domains a (Codomain a b) ~ Domains a b
-     -- , UnaryComputation a
-     -- , UnaryComputation b
-      )
-
--- type family ModuleTypes a b where
---   ModuleTypes (D r t) _ = t
---   ModuleTypes (Computation r t (D (r t))) _ = t
---   ModuleTypes _ (Computation r t (D (r t))) = t
---   ModuleTypes _ (D (r t)) = t
---   ModuleTypes (D (t)) (D (t)) = t
-
--- type family AddModules a b where
---   AddModules (D (r t)) _ = (D (r t))
---   AddModules _ (D (r t)) = (D (r t))
---   AddModules (D (t)) (D (t)) = (D (t))
 
 -- FIXME: singleton types on the DualTrace / Arity combination would restrict at least resetEl to a single possible implementation.
 class Trace op r a where
@@ -253,7 +120,11 @@ getNextUID = do
 
 
 -- Make a reverse node
-r :: (Trace op r a, Show op) => D r a -> DualTrace op r a -> Tag  -> Computation r a (D r a)
+r :: (Trace op r a, Show op)
+  => D r a
+  -> DualTrace op r a
+  -> Tag
+  -> Computation r a (D r a)
 r d op ai = do
   uid <- getNextUID
   return $ DR d op ai uid
@@ -263,6 +134,7 @@ p :: D r a -> D r a
 p =
   \case
     D v -> D v
+    Dm v -> Dm v
     DF d _ _ -> d
     DR d _ _ _ -> d
 
@@ -290,22 +162,29 @@ instance (Ord a) => Ord (D r a) where
 --     Dm v -> v
 
 
-monOp :: (MonOp op r a, FfMon op a, (Trace op r a), Show op) => op -> D r a -> Computation r a (D r a)
+monOp ::
+     (MonOp op r a, FfMon op a, (Trace op r a), Show op)
+  => op
+  -> D r a
+  -> Computation r a (D r a)
 monOp op a =
   let r_d =   U op
-  in monOp' op a (ff op) (fd op) (df op) r_d
+  in monOp' op a (ff op) (rff op) (fd op) (df op) r_d
 
-monOp' :: (Trace op r a, Computation r a ~ m, Show op) =>
-     op
+monOp' ::
+     (Trace op r a, Computation r a ~ m, Show op)
+  => op
   -> D r a
-  -> (a -> a)
+  -> ( a -> a)
+  -> (r a ->r a)
   -> (D r a -> m (D r a))
   -> (D r a -> D r a -> D r a -> m (D r a))
   -> (D r a -> DualTrace op r a)
   -> Computation r a (D r a)
-monOp' _ a ff fd df r_ =
+monOp' _ a ff rff fd df r_ =
   case a of
     D ap -> return . D $ ff ap
+    Dm ap -> return . Dm $ rff ap
     DF ap at ai -> do
       cp <- fd ap
       cdf <- df cp ap at
@@ -319,7 +198,8 @@ binOp' ::
   => op
   -> (D r a)
   -> (D r a)
-  -> (a -> a -> a)
+  -> (a -> a ->  a)
+  -> (r a ->r a -> r a)
   -> (D r a -> D r a -> m (D r a))
   -> (D r a -> D r a -> D r a -> m (D r a))
   -> (D r a -> D r a -> D r a -> m (D r a))
@@ -330,11 +210,32 @@ binOp' ::
   -> m (D r a)
 
 
-binOp' _ a b ff_fn fd df_da df_db df_dab r_d_d r_d_c r_c_d = do
+binOp' _ a b ff_fn rff_fn fd df_da df_db df_dab r_d_d r_d_c r_c_d = do
   case a of
     D ap ->
       case b of
         D bp -> return . D $ ff_fn ap bp
+        Dm bp -> return . Dm $ rff_fn ap bp
+        DF bp bt bi -> do
+          cp <- fd a bp
+          cdf <- df_db cp bp bt
+          return $ DF cp cdf bi
+        DR bp _ bi _ -> do
+          cfd <- fd a bp
+          r (cfd) (r_c_d a b) bi
+    D ap ->
+      case b of
+        D bp -> return . D $ ff_fn ap bp
+        DF bp bt bi -> do
+          cp <- fd a bp
+          cdf <- df_db cp bp bt
+          return $ DF cp cdf bi
+        DR bp _ bi _ -> do
+          cfd <- fd a bp
+          r (cfd) (r_c_d a b) bi
+    Dm ap ->
+      case b of
+        Dm bp -> return . Dm $ rff_fn ap bp
         DF bp bt bi -> do
           cp <- fd a bp
           cdf <- df_db cp bp bt
@@ -379,7 +280,7 @@ binOp' _ a b ff_fn fd df_da df_db df_dab r_d_d r_d_c r_c_d = do
           r (fda) (r_d_c a b) ai
         DF bp bt bi ->
           case compare ai bi of
-            EQ -> error "Forward and reverse AD r cannot run on the same level."
+            EQ -> error "Forward and reverse AD cannot run on the same level."
             LT -> do
               cp <- fd a bp
               cdf <- df_db cp bp bt
@@ -401,9 +302,20 @@ binOp' _ a b ff_fn fd df_da df_db df_dab r_d_d r_d_c r_c_d = do
 
 
 
-class (Num c, Show op) => FFBin op c where
+class (Num c, Show op) =>
+      FFBin op c where
   ff_bin :: op -> c -> c -> c
-  binOp :: (Trace op r c, BinOp op r (D r c) (D r c) c, DfDaBin op r (D r c) c, DfDbBin op r (D r c) c) => op -> D r c -> D r c -> Computation r c (D r c)
+ 
+  binOp ::
+       ( Trace op r c
+       , BinOp op r (D r c) (D r c) c
+       , DfDaBin op r (D r c) c
+       , DfDbBin op r (D r c) c
+       )
+    => op
+    -> D r c
+    -> D r c
+    -> Computation r c (D r c)
   binOp op a b =
     let traceOp = B op
         r_d_d = traceOp
@@ -413,7 +325,8 @@ class (Num c, Show op) => FFBin op c where
          op
          a
          b
-         (ff_bin op )
+         (ff_bin op)
+         (rff_bin op)
          (fd_bin op)
          (df_da op b)
          (df_db op a)
@@ -425,18 +338,27 @@ class (Num c, Show op) => FFBin op c where
 class FfMon op a where
   ff :: op -> a -> a
   
-class MonOp op r a  where
-  fd :: ( Computation r a ~ m) =>  op -> D r a -> m (D r a)
-  df :: ( Computation r a ~ m) =>  op -> D r a -> D r a -> D r a ->m( D r a)
+  
+class MonOp op r a where
+  rff :: op -> r a -> r a
+  fd :: (Computation r a ~ m) => op -> D r a -> m (D r a)
+  df :: (Computation r a ~ m) => op -> D r a -> D r a -> D r a -> m (D r a)
   
 class DfDaBin op r b c | b -> c where
-  df_da :: (Computation r c ~ m) => op -> b -> D r c -> D r c -> D r c -> m (D r c)
+  df_da ::
+       (Computation r c ~ m) => op -> b -> D r c -> D r c -> D r c -> m (D r c)
 
 class DfDbBin op r a c | a -> c where
-  df_db :: (Computation r c ~ m) => op -> a -> D r c -> D r c -> D r c -> m (D r c)
+  df_db ::
+       (Computation r c ~ m) => op -> a -> D r c -> D r c -> D r c -> m (D r c)
+
+class FfBin op a r where
+  rff_bin :: op -> r a -> r a -> r a
+  r_ff_bin :: op -> r a -> a -> r a
 
 class BinOp op r a b c | a b -> c where
   fd_bin :: (Computation r c ~ m) => op -> a -> b -> m (D r c)
+  
   df_dab ::
        (Computation r c ~ m)
     => op

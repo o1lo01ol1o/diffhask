@@ -37,185 +37,192 @@ import qualified Protolude                  as P
 
 --FIXME: prune redundancy
 
-type AdditiveDifferentiable t
-  = ( --AdditiveUnital (D t) t
-     --, AdditiveUnital (Computation t (D t)) t
+type AdditiveDifferentiable t r
+  = ( --AdditiveUnital (D r t) r t
+     --, AdditiveUnital (Computation r t (D r t)) r t
 
      --,
-     AdditiveMagma (D t) (D t) t
-     , AdditiveMagma (Computation t (D t)) (D t) t
-     , AdditiveMagma (Computation t (D t)) (Computation t (D t)) t
-     , AdditiveMagma (D t) (Computation t (D t)) t
+     AdditiveMagma (D r t) (D r t) r t
+     , AdditiveMagma (Computation r t (D r t)) (D r t) r t
+     , AdditiveMagma (Computation r t (D r t)) (Computation r t (D r t)) r t
+     , AdditiveMagma (D r t) (Computation r t (D r t)) r t
 
-     , AdditiveAssociative (D t) t
-     , AdditiveAssociative (Computation t (D t)) t
+     , AdditiveAssociative (D r t) r t
+     , AdditiveAssociative (Computation r t (D r t)) r t
 
-     , AdditiveCommutative (D t)  t
-     , AdditiveCommutative (Computation t (D t))  t
+     , AdditiveCommutative (D r t) r t
+     , AdditiveCommutative (Computation r t (D r t)) r t
 
-     , AdditiveInvertible (D t) t
-     , AdditiveInvertible (Computation t (D t)) t
+     , AdditiveInvertible (D r t) r t
+     , AdditiveInvertible (Computation r t (D r t)) r t
 
-     , AdditiveIdempotent (D t) (D t) t
-     , AdditiveIdempotent (Computation t (D t)) (D t) t
-     , AdditiveIdempotent (Computation t (D t)) (Computation t (D t)) t
-     , AdditiveIdempotent (D t) (Computation t (D t)) t
+     , AdditiveIdempotent (D r t) (D r t) r t
+     , AdditiveIdempotent (Computation r t (D r t)) (D r t) r t
+     , AdditiveIdempotent (Computation r t (D r t)) (Computation r t (D r t)) r t
+     , AdditiveIdempotent (D r t) (Computation r t (D r t)) r t
 
-     , Additive (D t) (D t) t
-     , Additive (Computation t (D t)) (D t) t
-     , Additive (Computation t (D t)) (Computation t (D t)) t
-     , Additive (D t) (Computation t (D t)) t
+     , Additive (D r t) (D r t) r t
+     , Additive (Computation r t (D r t)) (D r t) r t
+     , Additive (Computation r t (D r t)) (Computation r t (D r t)) r t
+     , Additive (D r t) (Computation r t (D r t)) r t
 
-     , AdditiveLeftCancellative (D t) (D t) t
-     , AdditiveLeftCancellative (Computation t (D t)) (D t) t
-     , AdditiveLeftCancellative (Computation t (D t)) (Computation t (D t)) t
-     , AdditiveLeftCancellative (D t) (Computation t (D t)) t
+     , AdditiveLeftCancellative (D r t) (D r t) r t
+     , AdditiveLeftCancellative (Computation r t (D r t)) (D r t) r t
+     , AdditiveLeftCancellative (Computation r t (D r t)) (Computation r t (D r t)) r t
+     , AdditiveLeftCancellative (D r t) (Computation r t (D r t)) r t
 
-     , AdditiveGroup (D t) (D t) t
-     , AdditiveGroup (Computation t (D t)) (D t) t
-     , AdditiveGroup (Computation t (D t)) (Computation t (D t)) t
-     , AdditiveGroup (D t) (Computation t (D t)) t
+     , AdditiveGroup (D r t) (D r t) r t
+     , AdditiveGroup (Computation r t (D r t)) (D r t) r t
+     , AdditiveGroup (Computation r t (D r t)) (Computation r t (D r t)) r t
+     , AdditiveGroup (D r t) (Computation r t (D r t)) r t
      )
 
-type MultiplicativeDifferential t
-  = (MultiplicativeMagma (D t) (D t) t
-     , MultiplicativeMagma (Computation t (D t)) (D t) t
-     , MultiplicativeMagma (Computation t (D t)) (Computation t (D t)) t
-     , MultiplicativeMagma (D t) (Computation t (D t)) t
+type MultiplicativeDifferential t r
+  = (MultiplicativeMagma (D r t) (D r t) r t
+     , MultiplicativeMagma (Computation r t (D r t)) (D r t) r t
+     , MultiplicativeMagma (Computation r t (D r t)) (Computation r t (D r t)) r t
+     , MultiplicativeMagma (D r t) (Computation r t (D r t)) r t
 
-     , MultiplicativeUnital (D t) t
-     , MultiplicativeUnital (Computation t (D t)) t
+     , MultiplicativeUnital (D r t) r t
+     , MultiplicativeUnital (Computation r t (D r t)) r t
 
-     , MultiplicativeAssociative (D t) t
-     , MultiplicativeAssociative (Computation t (D t)) t
+     , MultiplicativeAssociative (D r t) r t
+     , MultiplicativeAssociative (Computation r t (D r t)) r t
 
-     , MultiplicativeCommutative (D t) t
-     , MultiplicativeCommutative (Computation t (D t)) t
+     , MultiplicativeCommutative (D r t) r t
+     , MultiplicativeCommutative (Computation r t (D r t)) r t
 
-     , MultiplicativeInvertible (D t) t
-     , MultiplicativeInvertible (Computation t (D t)) t
+     , MultiplicativeInvertible (D r t) r t
+     , MultiplicativeInvertible (Computation r t (D r t)) r t
 
-     , Multiplicative (D t) (D t) t
-     , Multiplicative (Computation t (D t)) (D t) t
-     , Multiplicative (Computation t (D t)) (Computation t (D t)) t
-     , Multiplicative (D t) (Computation t (D t)) t
+     , Multiplicative (D r t) (D r t) r t
+     , Multiplicative (Computation r t (D r t)) (D r t) r t
+     , Multiplicative (Computation r t (D r t)) (Computation r t (D r t)) r t
+     , Multiplicative (D r t) (Computation r t (D r t)) r t
 
-     , MultiplicativeLeftCancellative (D t) (D t) t
-     , MultiplicativeLeftCancellative (Computation t (D t)) (D t) t
-     , MultiplicativeLeftCancellative (Computation t (D t)) (Computation t (D t)) t
-     , MultiplicativeLeftCancellative (D t) (Computation t (D t)) t
+     , MultiplicativeLeftCancellative (D r t) (D r t) r t
+     , MultiplicativeLeftCancellative (Computation r t (D r t)) (D r t) r t
+     , MultiplicativeLeftCancellative (Computation r t (D r t)) (Computation r t (D r t)) r t
+     , MultiplicativeLeftCancellative (D r t) (Computation r t (D r t)) r t
 
-     , MultiplicativeRightCancellative (D t) (D t) t
-     , MultiplicativeRightCancellative (Computation t (D t)) (D t) t
-     , MultiplicativeRightCancellative (Computation t (D t)) (Computation t (D t)) t
-     , MultiplicativeRightCancellative (D t) (Computation t (D t)) t
+     , MultiplicativeRightCancellative (D r t) (D r t) r t
+     , MultiplicativeRightCancellative (Computation r t (D r t)) (D r t) r t
+     , MultiplicativeRightCancellative (Computation r t (D r t)) (Computation r t (D r t)) r t
+     , MultiplicativeRightCancellative (D r t) (Computation r t (D r t)) r t
 
-     , MultiplicativeGroup (D t) (D t) t
-     , MultiplicativeGroup (Computation t (D t)) (D t) t
-     , MultiplicativeGroup (Computation t (D t)) (Computation t (D t)) t
-     , MultiplicativeGroup (D t) (Computation t (D t)) t)
+     , MultiplicativeGroup (D r t) (D r t) r t
+     , MultiplicativeGroup (Computation r t (D r t)) (D r t) r t
+     , MultiplicativeGroup (Computation r t (D r t)) (Computation r t (D r t)) r t
+     , MultiplicativeGroup (D r t) (Computation r t (D r t)) r t)
 
-type Differentiable t
-   = ( MultiplicativeDifferential t
-     , AdditiveDifferentiable t
-     , Distribution (D t) (D t) t
-     , Distribution (Computation t (D t)) (D t) t
-     , Distribution (Computation t (D t)) (Computation t (D t)) t
-     , Distribution (D t) (Computation t (D t)) t
+type Differentiable t r
+   = ( MultiplicativeDifferential t r
+     , AdditiveDifferentiable t r
+     , Distribution (D r t) (D r t) r t
+     , Distribution (Computation r t (D r t)) (D r t) r t
+     , Distribution (Computation r t (D r t)) (Computation r t (D r t)) r t
+     , Distribution (D r t) (Computation r t (D r t)) r t
 
-     , Semifield (D t) (D t) t
-     , Semifield (Computation t (D t)) (D t) t
-     , Semifield (Computation t (D t)) (Computation t (D t)) t
-     , Semifield (D t) (Computation t (D t)) t
+     , Semifield (D r t) (D r t) r t
+     , Semifield (Computation r t (D r t)) (D r t) r t
+     , Semifield (Computation r t (D r t)) (Computation r t (D r t)) r t
+     , Semifield (D r t) (Computation r t (D r t)) r t
 
-     , Field (D t) (D t) t
-     , Field (Computation t (D t)) (D t) t
-     , Field (Computation t (D t)) (Computation t (D t)) t
-     , Field (D t) (Computation t (D t)) t
+     , Field (D r t) (D r t) r t
+     , Field (Computation r t (D r t)) (D r t) r t
+     , Field (Computation r t (D r t)) (Computation r t (D r t)) r t
+     , Field (D r t) (Computation r t (D r t)) r t
 
-     , ExpField (D t) t
-     , ExpField (Computation t (D t)) t
+     , ExpField (D r t) r t
+     , ExpField (Computation r t (D r t)) r t
 
-     , BoundedField (D t) t
-     , BoundedField (Computation t (D t)) t
+     , BoundedField (D r t) r t
+     , BoundedField (Computation r t (D r t)) r t
 
-     , TrigField (D t) t
-     , TrigField (Computation t (D t)) t
+     , TrigField (D r t) r t
+     , TrigField (Computation r t (D r t)) r t
 
-     , Signed (D t) t
-     , Signed (Computation t (D t)) t
+     , Signed (D r t) r t
+     , Signed (Computation r t (D r t)) r t
 
-     , Normed (D t) t
-     , Normed (Computation t (D t)) t
+     , Normed (D r t) r t
+     , Normed (Computation r t (D r t)) r t
 
-     , Metric (D t) (D t) t
-     , Metric (Computation t (D t)) (D t) t
-     , Metric (Computation t (D t)) (Computation t (D t)) t
-     , Metric (D t) (Computation t (D t)) t
+     , Metric (D r t) (D r t) r t
+     , Metric (Computation r t (D r t)) (D r t) r t
+     , Metric (Computation r t (D r t)) (Computation r t (D r t)) r t
+     , Metric (D r t) (Computation r t (D r t)) r t
 
-     , Epsilon (D t) (D t) t
-     , Epsilon (Computation t (D t)) (D t) t
-     , Epsilon (Computation t (D t)) (Computation t (D t)) t
-     , Epsilon (D t) (Computation t (D t)) t
+     , Epsilon (D r t) (D r t) r t
+     , Epsilon (Computation r t (D r t)) (D r t) r t
+     , Epsilon (Computation r t (D r t)) (Computation r t (D r t)) r t
+     , Epsilon (D r t) (Computation r t (D r t)) r t
 
-     , Ring (D t) (D t) t
-     , Ring (Computation t (D t)) (D t) t
-     , Ring (Computation t (D t)) (Computation t (D t)) t
-     , Ring (D t) (Computation t (D t)) t
+     , Ring (D r t) (D r t) r t
+     , Ring (Computation r t (D r t)) (D r t) r t
+     , Ring (Computation r t (D r t)) (Computation r t (D r t)) r t
+     , Ring (D r t) (Computation r t (D r t)) r t
 
-     , CRing (D t) (D t) t
-     , CRing (Computation t (D t)) (D t) t
-     , CRing (Computation t (D t)) (Computation t (D t)) t
-     , CRing (D t) (Computation t (D t)) t
+     , CRing (D r t) (D r t) r t
+     , CRing (Computation r t (D r t)) (D r t) r t
+     , CRing (Computation r t (D r t)) (Computation r t (D r t)) r t
+     , CRing (D r t) (Computation r t (D r t)) r t
 
-     , StarSemiring (D t) t
-     , StarSemiring (Computation t (D t)) t
+     , StarSemiring (D r t) r t
+     , StarSemiring (Computation r t (D r t)) r t
 
-     , KleeneAlgebra (D t) (D t) t
-     , KleeneAlgebra (Computation t (D t)) (D t) t
-     , KleeneAlgebra (Computation t (D t)) (Computation t (D t)) t
-     , KleeneAlgebra (D t) (Computation t (D t)) t
+     , KleeneAlgebra (D r t) (D r t) r t
+     , KleeneAlgebra (Computation r t (D r t)) (D r t) r t
+     , KleeneAlgebra (Computation r t (D r t)) (Computation r t (D r t)) r t
+     , KleeneAlgebra (D r t) (Computation r t (D r t)) r t
 
      )
 
 
 
 -- Get Tangent
-t :: forall a. (Differentiable a) => D a -> Computation a (Tangent a)
+t :: forall a r. () => D r a -> Computation r a (Tangent r a)
 t =
   \case
-    D _ -> pure (zero :: D a)
+    D _ -> pure (zero :: D r a)
     DF _ at _ -> pure at
     DR {} -> error "Can't get tangent of a reverse node"
 
 
-initComp :: (P.RealFrac a, Differentiable a)=> ComputationState a
+initComp :: (P.RealFrac a)=> ComputationState r a
 initComp = ComputationState (Tag 0) (UID 0) M.empty M.empty (1e-6) 1000
 
 
-mkForward :: (Differentiable a) => Tag -> Tangent a -> Primal a  -> D a
+mkForward :: () => Tag -> Tangent r a -> Primal r a  -> D r a
 mkForward i tg d  = DF d tg i
 
 
-mkReverse :: (Differentiable a, Trace Noop a) => Tag -> D a -> Computation a (D a)
+mkReverse :: ( Trace Noop r a) => Tag -> D r a -> Computation r a (D r a)
 mkReverse i d = r d (N Noop) i
 
-instance Trace Noop a where
+instance Trace Noop r a where
   pushEl _ _ = pure []
   resetEl _ = pure []
 
-addDeltas :: (ModuleTypes a b ~ t) => Box a -> Box b -> Computation t (Box (AddModules a b))
+addDeltas ::
+     ( Additive (D r a) (D r a) r a
+     , AdditiveModule r (D r a) (D r a) a
+     , AdditiveBasis r (D r a) (D r a) a
+     )
+  => D r a
+  -> D r a
+  -> Computation r a (D r a)
 addDeltas a b =
   case (a, b) of
-    (X xa, X xb) -> fmap X (boxAdd xa xb)
-    (M ma, X xb) -> fmap M (boxModuleAddL ma xb)
-    (X xa, M mb) -> fmap M (boxModuleAddR xa mb)
-    (M ma, M mb) -> fmap M (boxBasisAdd ma mb)
+    (D xa, D xb) -> a + b
+    (Dm ma, D xb) -> a .+ b
+    (D xa, Dm mb) -> a +. b
+    (Dm ma, Dm mb) -> a .+. b
 
-applyDelta :: (Differentiable a) => UID
-  -> Box a
-  -> Adjoints a
-  -> Maybe (Computation a (D a))
+applyDelta :: () => UID
+  -> D r a
+  -> Adjoints r a
+  -> Maybe (Computation r a (D r a))
 applyDelta tag dlta adjs=
   case M.lookup tag adjs of
     Just v -> Just $ do
@@ -229,7 +236,7 @@ decrementFanout :: UID -> Fanouts -> (Maybe Tag, Fanouts)
 decrementFanout =
   M.updateLookupWithKey (\_ (Tag v) -> Just . Tag $ v P.- 1)
 
-incrementFanout :: UID -> Computation a Tag
+incrementFanout :: UID -> Computation r a Tag
 incrementFanout u = do
   st <- get
   let (mf, a) =
@@ -244,7 +251,7 @@ incrementFanout u = do
         return f)
 
 
-reset :: forall a. (Differentiable a, Show a) => [Box a] -> Computation a ()
+reset :: ( Show a) => [D r a] -> Computation r a ()
 reset l =
   case l of
     [] -> return ()
@@ -254,7 +261,7 @@ reset l =
           fanout <- incrementFanout uniq
           if fanout == Tag 1 then
             do
-              modify (\st -> st & adjoints %~ M.insert uniq  (X (zero :: D a)))
+              modify (\st -> st & adjoints %~ M.insert uniq  (X (zero :: D r a)))
               x <- resetEl o
               reset $ x `mappend` xs -- verify this
             else reset xs
@@ -262,7 +269,7 @@ reset l =
         _ -> reset xs
 
 -- recursively pushes nodes onto the reverse mode stack and evaluates partials
-push :: (Differentiable a) => [(Box a, Box a)] -> Computation a ()
+push :: () => [(D r a, D r a)] -> Computation r a ()
 push l =
   case l of
     [] -> return ()
@@ -285,23 +292,23 @@ push l =
             Nothing -> error "key not found in adjoints!"
         _ -> push xs
 
-reverseReset :: (Differentiable a, Show a) => Box a -> Computation a ()
+reverseReset :: ( Show a) => D r a -> Computation r a ()
 reverseReset d = do
   modify (& fanouts .~ M.empty )
   reset [ d]
 
-reverseProp :: ( Differentiable a, Show a) => Box a -> Box a -> Computation a ()
+reverseProp :: (  Show a) => D r a -> D r a -> Computation r a ()
 reverseProp  v d = do
   reverseReset  d
   push [( v,  d)]
 
 {-# INLINE primalTanget #-}
-primalTanget :: (Differentiable a, Show a) => D a -> Computation a (D a, Tangent a)
+primalTanget :: ( Show a) => D r a -> Computation r a (D r a, Tangent r a)
 primalTanget d = do
   ct <- t d
   pure (p d, ct)
 
-adjoint :: forall a. (Differentiable a, Show a) =>  D a -> Computation a (Box a)
+adjoint :: forall a r. ( Show a) =>  D r a -> Computation r a (D r a)
 adjoint d =
   case d of
     DR _ _ _ uniq -> do
@@ -310,57 +317,57 @@ adjoint d =
         Just a  -> return a
         Nothing -> error "Adjoint not in map!"
     DF{} -> error "Cannot get adjoint value of DF. Use makeReverse on this node when composing the computation."
-    D _ -> pure (zero :: D a)
+    D _ -> pure (zero :: D r a)
 
 
-runComputation :: (Differentiable a) => State s a -> s -> (a, s)
+runComputation :: () => State s a -> s -> (a, s)
 runComputation = runState
 
-compute :: (P.RealFrac a, Differentiable a) => Computation a (b) -> b
+compute :: (P.RealFrac a) => Computation r a (b) -> b
 compute f = evalState f initComp
 
 {-# INLINE computeAdjoints' #-}
-computeAdjoints' :: forall a. (Differentiable a, Show a) => D a -> Computation a ()
+computeAdjoints' :: forall a r. ( Show a) => D r a -> Computation r a ()
 computeAdjoints' d = do
   modify (\st -> st & adjoints .~ M.empty)
-  o <- pure (one :: D a)
+  o <- pure (one :: D r a)
   reverseProp o d
 
 {-# INLINE computeAdjoints #-}
-computeAdjoints :: (Differentiable a, Show a) => D a -> Computation a (Adjoints a)
+computeAdjoints :: ( Show a) => D r a -> Computation r a (Adjoints r a)
 computeAdjoints d = do
   computeAdjoints' d
   st <- get
   return $ st ^. adjoints
 {-# INLINE diff' #-}
 
-diff' :: forall a.
-     (Differentiable a, Show a)
-  => (D a -> Computation a (D a))
-  -> D a
-  -> Computation a (D a, Tangent a)
+diff' :: forall a r.
+     ( Show a)
+  => (D r a -> Computation r a (D r a))
+  -> D r a
+  -> Computation r a (D r a, Tangent r a)
 diff' f x = do
   n <- getNextTag
-  o <- pure (one :: D a)
+  o <- pure (one :: D r a)
   fout <- f $ mkForward n o x
   primalTanget fout
 {-# INLINE diff #-}
 
 diff ::
-     (Differentiable a, Show a)
-  => (D a -> Computation a (D a))
-  -> D a
-  -> Computation a (Tangent a)
+     ( Show a)
+  => (D r a -> Computation r a (D r a))
+  -> D r a
+  -> Computation r a (Tangent r a)
 diff f x =
   snd <$> diff' f x
 
 {-# INLINE diffn #-}
 diffn ::
-     (Differentiable a, Show a)
+     ( Show a)
   => Int
-  -> (D a -> Computation a (D a))
-  -> D a
-  -> Computation a (Tangent a)
+  -> (D r a -> Computation r a (D r a))
+  -> D r a
+  -> Computation r a (Tangent r a)
 diffn n f x =
   if n < 0
     then error "Cannot get the nth derivitive when n is negative!"
@@ -369,11 +376,11 @@ diffn n f x =
            else go n f x
   where
     go ::
-         (Differentiable a, Show a)
+         ( Show a)
       => Int
-      -> (D a -> Computation a (D a))
-      -> D a
-      -> Computation a (Tangent a)
+      -> (D r a -> Computation r a (D r a))
+      -> D r a
+      -> Computation r a (Tangent r a)
     go n f =
       case n of
         0 -> diff f
@@ -381,11 +388,11 @@ diffn n f x =
 
 {-# INLINE diffn' #-}
 diffn' ::
-     (Differentiable a, Show a)
+     ( Show a)
   => Int
-  -> (D a -> Computation a (D a))
-  -> D a
-  -> Computation a (D a, (Tangent a))
+  -> (D r a -> Computation r a (D r a))
+  -> D r a
+  -> Computation r a (D r a, (Tangent r a))
 diffn' n f x = do
   it <- f x
   again <- diffn n f x
@@ -396,10 +403,10 @@ diffn' n f x = do
 -- (D 9.0,D 1.0)
 {-# INLINE grad' #-}
 grad' ::
-     (Trace Noop a, Differentiable a, Show a)
-  => (D a -> Computation a (D a))
-  -> D a
-  -> Computation a (D a, (D a))
+     (Trace Noop r a,  Show a)
+  => (D r a -> Computation r a (D r a))
+  -> D r a
+  -> Computation r a (D r a, (D r a))
 grad' f x = do
   ntg <- getNextTag
   xa <- mkReverse ntg x
@@ -410,26 +417,26 @@ grad' f x = do
 
 {-# INLINE grad #-}
 grad ::
-     (Trace Noop a, Differentiable a, Show a) =>
-   (D a -> Computation a (D a))
-  -> D a
-  -> Computation a (D a)
+     (Trace Noop r a,  Show a) =>
+   (D r a -> Computation r a (D r a))
+  -> D r a
+  -> Computation r a (D r a)
 grad f x = do
   (_, g)<- grad' f x
   return g
 
 -- Original value and Jacobian product of `f`, at point `x`, along `v`. Forward AD.
-jacobian' :: (Differentiable a, Show a) =>
-     (D a -> Computation a (D a)) -> Tangent a -> Primal a -> Computation a (D a, Tangent a)
+jacobian' :: ( Show a) =>
+     (D r a -> Computation r a (D r a)) -> Tangent r a -> Primal r a -> Computation r a (D r a, Tangent r a)
 jacobian' f x v = do
   ntg <- getNextTag
   fout <- f $ mkForward ntg v x
   primalTanget fout
 
 jacobian ::
-     (Show a, Differentiable a)
-  => (D a -> Computation a (D a))
-  -> Tangent a
-  -> Primal a
-  -> Computation a (Tangent a)
+     (Show a)
+  => (D r a -> Computation r a (D r a))
+  -> Tangent r a
+  -> Primal r a
+  -> Computation r a (Tangent r a)
 jacobian f x v = snd <$> jacobian' f x v
