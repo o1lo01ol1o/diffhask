@@ -12,6 +12,7 @@ module Internal.NumHask.Algebra
   , module Internal.NumHask.Algebra.Module
   , module Internal.NumHask.Algebra.Multiplicative
   , module Internal.NumHask.Algebra.Ring
+  , module Internal.NumHask.Algebra.Diff
   ) where
 
 import Internal.NumHask.Algebra.Additive
@@ -24,3 +25,4 @@ import Internal.NumHask.Algebra.Metric
 import Internal.NumHask.Algebra.Module
 import Internal.NumHask.Algebra.Multiplicative
 import Internal.NumHask.Algebra.Ring
+import Internal.NumHask.Algebra.Diff

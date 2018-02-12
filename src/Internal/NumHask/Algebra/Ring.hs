@@ -28,24 +28,6 @@ class ( MultiplicativeAssociative a r t
       ) =>
       Semiring a b r t
 
-instance Semiring (D r Double) (D r Double) r Double
-
-instance Semiring (Computation r Double (D r Double)) (D r Double) r Double
-
-instance Semiring (D r Double) (Computation r Double (D r Double)) r Double
-
-instance Semiring (D r Float) (D r Float) r Float
-
-instance Semiring (D r Float) (Computation r Float (D r Float)) r Float
-
-instance Semiring (Computation r Float (D r Float)) (D r Float) r Float
-
-instance Semiring (Computation r Double (D r Double)) (Computation r Double (D r Double)) r Double
-
-instance Semiring (Computation r Float (D r Float)) (Computation r Float (D r Float)) r Float
-
-
-
 -- | Ring
 -- a summary of the laws inherited from the ring super-classes
 --
@@ -69,42 +51,11 @@ class ( Semiring a b r t
       ) =>
       Ring a b r t
 
-instance Ring (D r Double) (D r Double) r Double
-
-instance Ring (Computation r Double (D r Double)) (D r Double) r Double
-
-instance Ring (D r Double) (Computation r Double (D r Double)) r Double
-
-instance Ring (D r Float) (D r Float) r Float
-
-instance Ring (D r Float) (Computation r Float (D r Float)) r Float
-
-instance Ring (Computation r Float (D r Float)) (D r Float) r Float
-
-instance Ring (Computation r Double (D r Double)) (Computation r Double (D r Double)) r Double
-
-instance Ring (Computation r Float (D r Float)) (Computation r Float (D r Float)) r Float
 
 
 -- | CRing is a Ring with Multiplicative Commutation.  It arises often due to '*' being defined as a multiplicative commutative operation.
 class (Multiplicative a b r t, Ring a b r t) =>
       CRing a b r t
-
-instance CRing (D r Double) (D r Double) r Double
-
-instance CRing (Computation r Double (D r Double)) (D r Double) r Double
-
-instance CRing (D r Double) (Computation r Double (D r Double)) r Double
-
-instance CRing (D r Float) (D r Float) r Float
-
-instance CRing (D r Float) (Computation r Float (D r Float)) r Float
-
-instance CRing (Computation r Float (D r Float)) (D r Float) r Float
-
-instance CRing (Computation r Double (D r Double)) (Computation r Double (D r Double)) r Double
-
-instance CRing (Computation r Float (D r Float)) (Computation r Float (D r Float)) r Float
 
 -- | StarSemiring
 --
@@ -129,3 +80,54 @@ class ( Semiring a a r t
 --
 class (StarSemiring a r t, StarSemiring b r t, AdditiveIdempotent a b r t) =>
       KleeneAlgebra a b r t
+
+instance Semiring (D r Double) (D r Double) r Double
+
+instance Semiring (Computation r Double (D r Double)) (D r Double) r Double
+
+instance Semiring (D r Double) (Computation r Double (D r Double)) r Double
+
+instance Semiring (D r Float) (D r Float) r Float
+
+instance Semiring (D r Float) (Computation r Float (D r Float)) r Float
+
+instance Semiring (Computation r Float (D r Float)) (D r Float) r Float
+
+instance Semiring (Computation r Double (D r Double)) (Computation r Double (D r Double)) r Double
+
+instance Semiring (Computation r Float (D r Float)) (Computation r Float (D r Float)) r Float
+
+
+
+instance Ring (D r Double) (D r Double) r Double
+
+instance Ring (Computation r Double (D r Double)) (D r Double) r Double
+
+instance Ring (D r Double) (Computation r Double (D r Double)) r Double
+
+instance Ring (D r Float) (D r Float) r Float
+
+instance Ring (D r Float) (Computation r Float (D r Float)) r Float
+
+instance Ring (Computation r Float (D r Float)) (D r Float) r Float
+
+instance Ring (Computation r Double (D r Double)) (Computation r Double (D r Double)) r Double
+
+instance Ring (Computation r Float (D r Float)) (Computation r Float (D r Float)) r Float
+
+instance CRing (D r Double) (D r Double) r Double
+
+instance CRing (Computation r Double (D r Double)) (D r Double) r Double
+
+instance CRing (D r Double) (Computation r Double (D r Double)) r Double
+
+instance CRing (D r Float) (D r Float) r Float
+
+instance CRing (D r Float) (Computation r Float (D r Float)) r Float
+
+instance CRing (Computation r Float (D r Float)) (D r Float) r Float
+
+instance CRing (Computation r Double (D r Double)) (Computation r Double (D r Double)) r Double
+
+instance CRing (Computation r Float (D r Float)) (Computation r Float (D r Float)) r Float
+

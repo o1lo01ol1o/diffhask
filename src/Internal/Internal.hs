@@ -28,7 +28,7 @@ import           Lens.Micro.TH              (makeLenses)
 import           Prelude                    hiding (abs, negate, signum, (*),
                                              (+), (-), (/))
 import qualified Protolude                  as P
-
+import qualified NumHask.Prelude as E
 
 import           Data.Dependent.Sum
 import           Data.Functor.Identity
@@ -53,7 +53,7 @@ data D r a where
   D :: a -> D r a -- scalar
   Dm :: r a -> D r a -- array
   DF :: Primal r a -> Tangent r a -> Tag -> D r a
-  DR :: (Show op) => D r a -> DualTrace op r a -> Tag -> UID -> D r a
+  DR :: (Show op, Trace op r a) => D r a -> DualTrace op r a -> Tag -> UID -> D r a
 
 instance (Show a, Show Tag, Show UID, Show (r a)) => Show (D r a) where
   show (D a)            = "D " ++ show a
@@ -167,7 +167,7 @@ class MonOp op r a where
   rff :: op -> r a -> r a
   fd :: (Computation r a ~ m) => op -> D r a -> m (D r a)
   df :: (Computation r a ~ m) => op -> D r a -> D r a -> D r a -> m (D r a)
-
+-- {-#INLINE monOp #-}
 monOp ::
      (MonOp op r a, FfMon op a, (Trace op r a), Show op)
   => op
@@ -193,12 +193,18 @@ class DfDbBin op r a c | a -> c where
   df_db ::
        (Computation r c ~ m) => op -> a -> D r c -> D r c -> D r c -> m (D r c)
 
-class FfBin op a r where
+class (Show op, E.AdditiveBasis r a, E.AdditiveModule r a) => FfBin op a r where
   rff_bin :: op -> r a -> r a -> r a -- Forward mode function for arrays
+  rff_bin op _ _ = error $ "array x array operation is not defined for " ++ (show op)
   r_ff_bin :: op -> r a -> a -> r a -- For scalar x arrays
+  r_ff_bin op _ _ = error $ "array x scalar operation is not defined for " ++ (show op)
   _ff_bin :: op -> a -> r a -> r a -- For scalar x arrays
+  _ff_bin op _ _ = error $ "scalar x array operation is not defined for " ++ (show op)
 
-class BinOp op r a b c | a b -> c where
+
+
+
+class DfBin op r a b c | a b -> c where
   fd_bin :: (Computation r c ~ m) => op -> a -> b -> m (D r c)
   df_dab ::
        (Computation r c ~ m)
@@ -212,16 +218,16 @@ class BinOp op r a b c | a b -> c where
     -> (D r c)
     -> m (D r c)
 
-class (Num a, Show op) =>
-      FFBin op a where
+class (Show op) =>
+      BinOp op a where
   ff_bin :: op -> a -> a -> a
   binOp ::
-       ( Num a
-       , Trace op r a
+       (
+        Trace op r a
        , Computation r a ~ m
        , Show op
        , Trace op r a
-       , BinOp op r (D r a) (D r a) a
+       , DfBin op r (D r a) (D r a) a
        , DfDaBin op r (D r a) a
        , DfDbBin op r (D r a) a
        , FfBin op a r
@@ -230,6 +236,7 @@ class (Num a, Show op) =>
     -> (D r a)
     -> (D r a)
     -> m (D r a)
+  -- {-#INLINE binOp #-}
   binOp op a b = do
     case a of
       D ap ->

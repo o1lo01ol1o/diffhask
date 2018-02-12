@@ -19,6 +19,7 @@ module Internal.NumHask.Prelude
   , module Internal.NumHask.Algebra.Multiplicative
   , module Internal.NumHask.Algebra.Ring
   , module Internal.NumHask.Algebra.Singleton
+  , module Internal.NumHask.Algebra.Diff
 
   ) where
 
@@ -41,6 +42,7 @@ import Internal.NumHask.Algebra.Module
 import Internal.NumHask.Algebra.Multiplicative
 import Internal.NumHask.Algebra.Ring
 import Internal.NumHask.Algebra.Singleton
+import Internal.NumHask.Algebra.Diff
 
 -- $backend
 -- NumHask imports Protolude as the prelude and replaces much of the 'Num' heirarchy in base.

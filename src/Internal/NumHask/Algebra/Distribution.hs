@@ -37,3 +37,5 @@ instance Distribution (Computation r Float (D r Float)) (D r Float) r Float
 instance Distribution (Computation r Double (D r Double)) (Computation r Double (D r Double)) r Double
 
 instance Distribution (Computation r Float (D r Float)) (Computation r Float (D r Float)) r Float
+
+

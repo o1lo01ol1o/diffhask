@@ -1,6 +1,6 @@
 name:                diffhask
 version:             0.1.0.0
-description:         DSL for forward and reverse mode automatic differentiation in haskell.  instpired by DiffSharp.
+description:         DSL for forward and reverse mode automatic differentiation in haskell.  Port of DiffSharp.
 homepage:            https://github.com/o1lo01ol1o/diffhask
 bug-reports:         https://github.com/o1lo01ol1o/diffhask/issues
 license:             MIT
@@ -29,6 +29,7 @@ library
                      , Internal.NumHask.Algebra.Module
                      , Internal.NumHask.Algebra.Metric
                      , Internal.NumHask.Algebra.Singleton
+                     , Internal.NumHask.Algebra.Diff
                      , Internal.NumHask.Prelude
 
 
@@ -48,6 +49,12 @@ library
                      , dependent-sum-template
                      , dependent-sum
                      , dependent-map
+                     , numhask
+                     , numhask-array
+                     
+                     
+                   
+                      
 
 
 

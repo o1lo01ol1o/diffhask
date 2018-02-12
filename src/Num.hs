@@ -2,57 +2,72 @@
 {-# LANGUAGE FlexibleContexts      #-}
 {-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE NoImplicitPrelude     #-}
 {-# LANGUAGE TypeFamilies          #-}
-{-# LANGUAGE NoImplicitPrelude          #-}
-{-# LANGUAGE UndecidableInstances          #-}
+{-# LANGUAGE UndecidableInstances  #-}
 module Num (module Num) where
-import           Control.Monad.State.Strict (State, get, gets, modify, put,
-                                             (>=>), join, liftM, liftM2)
+import           Control.Monad.State.Strict (State, get, gets, join, liftM,
+                                             liftM2, modify, put, (>=>))
 import           Core
 import qualified Data.Map                   as M (Map, empty, insert, lookup,
                                                   updateLookupWithKey)
 import           Lens.Micro                 ((%~), (&), (.~), (^.))
-import NumHask.Prelude hiding (State, evalState, runState, diff)
-
--- $setup
--- >>> :set -XDataKinds
--- >>> :set -XOverloadedLists
--- >>> :set -XTypeFamilies
--- >>> :set -XFlexibleContexts
--- >>> let a = D 2.0 :: D Float
+import           Internal.NumHask.Prelude            hiding (State, diff, evalState,
+                                             runState)
+import qualified NumHask.Prelude  as P
+import Internal.Internal
 
 
-data FixPoint = FixPoint
+
+data FixPoint = FixPoint deriving Show
 
 fpPush ::
-     (P.Ord a)
+     ( Ord a
+     , Show a
+     , AdditiveUnital (D r a) r a
+     , MultiplicativeUnital (D r a) r a
+     , Additive (D r a) (D r a) r a
+     , AdditiveModule r (D r a) (D r a) a
+     , AdditiveBasis r (D r a) (D r a) a
+     , Signed (D r a) r a
+     , AdditiveGroup (D r a) (D r a) r a
+     )
   => D r a
   -> D r a
   -> D r a
   -> D r a
   -> D r a
-  -> Computation a [(D r a, D r a)]
+  -> Computation r a [(D r a, D r a)]
 fpPush b bfirst aprev alast dA = do
   reverseProp dA alast
   eps <- gets (\st -> st ^. fpEps)
   mxitr <- gets (\st -> st ^. maxFpIter)
   go mxitr (D eps) 0 alast aprev dA
   adjBf <- adjoint bfirst
-  P.pure [(X adjBf, b)]
+  pure [(adjBf, b)]
   where
     go ::
-         (P.Ord a)
-      => P.Int
+         ( Ord a
+         , Show a
+         , AdditiveUnital (D r a) r a
+         , MultiplicativeUnital (D r a) r a
+         , Additive (D r a) (D r a) r a
+         , AdditiveModule r (D r a) (D r a) a
+         , AdditiveBasis r (D r a) (D r a) a
+         , Signed (D r a) r a
+         , AdditiveGroup (D r a) (D r a) r a
+         )
+      => Int
       -> D r a
-      -> P.Int
+      -> Int
       -> D r a
       -> D r a
       -> D r a
-      -> Computation a ()
+      -> Computation r a ()
     go miter eps oi apr alst d =
       let i = oi P.+ 1
       in if i P.>= miter
-           then P.pure ()
+           then pure ()
            else do
              adjP <- adjoint apr
              adjL <- adjoint alst
@@ -60,22 +75,35 @@ fpPush b bfirst aprev alast dA = do
              s <- adjP + dmadjL
              as <- abs s
              if as P.<= eps
-               then P.pure ()
+               then pure ()
                else do
                  dadjP <- d + adjP
                  reverseProp (dadjP) adjL
 
-instance (P.Ord a) => Trace FixPoint a where
+instance ( Ord a
+         , Show a
+         , AdditiveUnital (D r a) r a
+         , MultiplicativeUnital (D r a) r a
+         , Additive (D r a) (D r a) r a
+         , AdditiveModule r (D r a) (D r a) a
+         , AdditiveBasis r (D r a) (D r a) a
+         , Signed (D r a) r a
+     , AdditiveGroup (D r a) (D r a) r a
+         ) =>
+         Trace FixPoint r a where
   pushEl (FxP _ (b, bfirst, aprev, alast)) = fpPush b bfirst aprev alast
-  resetEl (FxP _ (b, bf, ap, al)) = P.pure [b]
+  resetEl (FxP _ (b, bf, ap, al)) = pure [b]
 
-
--- | FixedPoint
--- >>> let g a b = (a + b / a) / (D 2.0 :: D Float)
--- >>> compute $ diff' (fixPoint g (D 1.2)) (D 25.0 :: D Float) 
--- (D 1.0, D 5.0), (D 1.0, D 0.1)
 fixPoint ::
-     (P.Ord a, Trace Noop a)
+     (Ord a, Trace Noop r a, Show a
+     , AdditiveUnital (D r a) r a
+     , MultiplicativeUnital (D r a) r a
+     , Additive (D r a) (D r a) r a
+     , AdditiveModule r (D r a) (D r a) a
+     , AdditiveBasis r (D r a) (D r a) a
+     , Signed (D r a) r a
+     , AdditiveGroup (D r a) (D r a) r a
+     , AdditiveGroup (D r a) (Computation r a  (D r a)) r a)
   => (D r a -> D r a -> Computation r a (D r a))
   -> D r a
   -> D r a
@@ -84,17 +112,24 @@ fixPoint g a0 b = do
   eps <- gets (\st -> st ^. fpEps)
   mxitr <- gets (\st -> st ^. maxFpIter)
   case b of
-    D _ -> goD g (D eps) mxitr 1 a0 b
-    Dm _ -> goD g (D eps) mxitr 1 a0 b
-    DF _ _ bi -> goDF g (D eps) mxitr 1 a0 b bi
+    D _          -> goD g (D eps) mxitr 1 a0 b
+    Dm _         -> goD g (D eps) mxitr 1 a0 b
+    DF _ _ bi    -> goDF g (D eps) mxitr 1 a0 b bi
     DR bp _ bi _ -> goDR g (D eps) mxitr 1 a0 b bi bp
   where
     goD ::
-         (P.Ord a)
+         (Ord a, Show a
+     , AdditiveUnital (D r a) r a
+     , MultiplicativeUnital (D r a) r a
+     , Additive (D r a) (D r a) r a
+     , AdditiveModule r (D r a) (D r a) a
+     , AdditiveBasis r (D r a) (D r a) a
+     , Signed (D r a) r a
+     , AdditiveGroup (D r a) (D r a) r a)
       => (D r a -> D r a -> Computation r a (D r a))
       -> D r a
-      -> P.Int
-      -> P.Int
+      -> Int
+      -> Int
       -> D r a
       -> D r a
       -> Computation r a (D r a)
@@ -110,11 +145,19 @@ fixPoint g a0 b = do
                then pure a
                else goD g e m ni aa b
     goDF ::
-         (P.Ord a)
+         (Ord a, Show a
+     , AdditiveUnital (D r a) r a
+     , MultiplicativeUnital (D r a) r a
+     , Additive (D r a) (D r a) r a
+     , AdditiveModule r (D r a) (D r a) a
+     , AdditiveBasis r (D r a) (D r a) a
+     , Signed (D r a) r a
+     , AdditiveGroup (D r a) (D r a) r a
+     , AdditiveGroup (D r a) (Computation r a  (D r a)) r a)
       => (D r a -> D r a -> Computation r a (D r a))
       -> D r a
-      -> P.Int
-      -> P.Int
+      -> Int
+      -> Int
       -> D r a
       -> D r a
       -> Tag
@@ -137,7 +180,14 @@ fixPoint g a0 b = do
                  pure P.$ DF (p a) (cta) bi
                else goDF g e m ni aa b bi
     drFin ::
-         (Trace Noop a, P.Ord a)
+         (Trace Noop r a, Ord a, Show a
+     , AdditiveUnital (D r a) r a
+     , MultiplicativeUnital (D r a) r a
+     , Additive (D r a) (D r a) r a
+     , AdditiveModule r (D r a) (D r a) a
+     , AdditiveBasis r (D r a) (D r a) a
+     , Signed (D r a) r a
+     , AdditiveGroup (D r a) (D r a) r a)
       => (D r a -> D r a -> Computation r a (D r a))
       -> D r a
       -> Tag
@@ -149,11 +199,18 @@ fixPoint g a0 b = do
       alast <- g aprev bfirst
       r (p a) (FxP FixPoint (b, bfirst, aprev, alast)) bi
     goDR ::
-         (P.Ord a, Trace Noop a)
+         (Ord a, Trace Noop r a, Show a
+     , AdditiveUnital (D r a) r a
+     , MultiplicativeUnital (D r a) r a
+     , Additive (D r a) (D r a) r a
+     , AdditiveModule r (D r a) (D r a) a
+     , AdditiveBasis r (D r a) (D r a) a
+     , Signed (D r a) r a
+     , AdditiveGroup (D r a) (D r a) r a)
       => (D r a -> D r a -> Computation r a (D r a))
       -> D r a
-      -> P.Int
-      -> P.Int
+      -> Int
+      -> Int
       -> D r a
       -> D r a
       -> Tag

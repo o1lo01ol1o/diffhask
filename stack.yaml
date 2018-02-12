@@ -1,7 +1,15 @@
-flags: {}
+
+  
 packages:
 - .
+- location:
+     git: https://github.com/o1lo01ol1o/numhask-array
+     commit: 8d1e75c45d587f541f6b6031276e317bfe4e0035
+  extra-dep: true
+
 extra-deps:
+- dimensions-0.3.2.0
 - tasty-0.12
 - value-supply-0.6
 resolver: lts-10.4
+allow-newer: true

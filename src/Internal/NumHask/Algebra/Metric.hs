@@ -13,7 +13,6 @@ module Internal.NumHask.Algebra.Metric
   , Metric(..)
   , Epsilon(..)
   , (≈)
-  , Abs
   ) where
 
 import Internal.NumHask.Algebra.Additive
@@ -34,7 +33,48 @@ class (MultiplicativeUnital a  r t) =>
   sign :: a -> Computation r t (D r t) 
   abs :: a -> Computation r t (D r t)
 
-data Abs = Abs deriving P.Show 
+
+
+
+
+-- | Like Signed, except the codomain can be different to the domain.
+class Normed a r t | a -> r, a -> t where
+  size :: a -> Computation r t (D r t)
+
+
+
+-- | distance between numbers
+--
+-- > distance a b >= zero
+-- > distance a a == zero
+-- > \a b c -> distance a c + distance b c - distance a b >= zero &&
+-- >           distance a b + distance b c - distance a c >= zero &&
+-- >           distance a b + distance a c - distance b c >= zero &&
+class Metric a b r t | a -> r, a -> t, b -> r, b -> t, a b -> r, a b -> t where
+  distance :: a -> b -> Computation r t (D r t)
+
+
+
+-- | todo: This should probably be split off into some sort of alternative Equality logic, but to what end?
+class (AdditiveGroup a b r t) =>
+      Epsilon a b r t where
+  nearZero :: (c ~ a, c ~ b) => c -> Computation r t (Bool)
+  aboutEqual :: a -> b -> Computation r t (Bool)
+  positive :: (c ~ a, c ~ b) => c -> Computation r t (Bool)
+  veryPositive :: (c ~ a, c ~ b) => c -> Computation r t (Bool)
+  veryNegative :: (c ~ a, c ~ b) => c -> Computation r t (Bool)
+  
+
+infixl 4 ≈
+
+-- | todo: is utf perfectly acceptable these days?
+(≈) :: (Epsilon a b r t ) => a -> b -> Computation r t (Bool)
+(≈) = aboutEqual
+
+
+data Abs = Abs deriving P.Show
+
+
 
 instance Signed (D r Double) r Double where
   sign a =
@@ -59,6 +99,8 @@ instance Signed (Computation r Double (D r Double)) r Double where
   abs a = do
     ca <- a
     monOp Abs ca
+
+
 
 instance Signed (Computation r Float (D r Float)) r Float where
   sign a = do
@@ -90,16 +132,13 @@ instance (P.Num a) => FfMon Abs a where
   {-# INLINE ff #-}
   ff _ a = P.abs a
 
+
 instance (Signed (D r a) r a,  Multiplicative (D r a) (D r a) r a) => Trace Abs r a where
   pushEl (U _ a) dA = do
     sp <-  sign (p a)
     dl <- dA * sp
     P.pure [(dl, a)]
   resetEl (U _ a ) = P.pure [a]
-
--- | Like Signed, except the codomain can be different to the domain.
-class Normed a r t | a -> r, a -> t where
-  size :: a -> Computation r t (D r t)
 
 instance Normed (D r Double) r Double where
   size = abs
@@ -113,15 +152,6 @@ instance Normed (Computation r Double (D r Double)) r Double where
 instance Normed (Computation r Float (D r Float)) r Float where
   size = abs
 
--- | distance between numbers
---
--- > distance a b >= zero
--- > distance a a == zero
--- > \a b c -> distance a c + distance b c - distance a b >= zero &&
--- >           distance a b + distance b c - distance a c >= zero &&
--- >           distance a b + distance a c - distance b c >= zero &&
-class Metric a b r t | a -> r, a -> t, b -> r, b -> t, a b -> r, a b -> t where
-  distance :: a -> b -> Computation r t (D r t)
 
 instance Metric (D r Double) (D r Double) r Double where
   distance a b = abs (a - b)
@@ -147,23 +177,6 @@ instance Metric (Computation r Double (D r Double)) (D r Double) r Double where
 instance Metric (Computation r Float (D r Float)) (D r Float) r Float where
   distance a b = abs (a - b)
 
-
--- | todo: This should probably be split off into some sort of alternative Equality logic, but to what end?
-class (AdditiveGroup a b r t) =>
-      Epsilon a b r t where
-  nearZero :: (c ~ a, c ~ b) => c -> Computation r t (Bool)
-  aboutEqual :: a -> b -> Computation r t (Bool)
-  positive :: (c ~ a, c ~ b) => c -> Computation r t (Bool)
-  veryPositive :: (c ~ a, c ~ b) => c -> Computation r t (Bool)
-  veryNegative :: (c ~ a, c ~ b) => c -> Computation r t (Bool)
-  
-
-infixl 4 ≈
-
--- | todo: is utf perfectly acceptable these days?
-(≈) :: (Epsilon a b r t ) => a -> b -> Computation r t (Bool)
-(≈) = aboutEqual
-
 instance (P.Eq (Computation r Double (D r Double))) => Epsilon (D r Double) (D r Double) r Double where
   nearZero a = do
     ca <- abs a
@@ -181,6 +194,7 @@ instance (P.Eq (Computation r Double (D r Double))) => Epsilon (D r Double) (D r
     pa <- positive a
     P.pure $ P.not na P.|| pa
 
+
 instance (P.Eq (Computation r Float (D r Float))) => Epsilon (D r Float) (D r Float) r Float where
   nearZero a = do
     ca <- abs a
@@ -189,21 +203,6 @@ instance (P.Eq (Computation r Float (D r Float))) => Epsilon (D r Float) (D r Fl
   positive a = do
     ca <- abs a
     P.pure $ (a == ca)
-  veryPositive a = do
-    na <- nearZero a
-    pa <- positive a
-    P.pure $ P.not na && pa
-  veryNegative a = do
-    na <- nearZero a
-    pa <- positive a
-    P.pure $ P.not na P.|| pa
-
-instance (P.Eq (Computation r Double (D r Double))) => Epsilon (Computation r Double (D r Double)) (Computation r Double (D r Double)) r Double where
-  nearZero a = do
-    ca <- abs a
-    P.pure (ca <= (D 1e-12 :: D r Double))
-  aboutEqual a b = nearZero $ a - b
-  positive a = P.pure $ (a == abs a)
   veryPositive a = do
     na <- nearZero a
     pa <- positive a
@@ -227,6 +226,8 @@ instance (P.Eq (Computation r Float (D r Float))) => Epsilon (Computation r Floa
     na <- nearZero a
     pa <- positive a
     P.pure $ P.not na P.|| pa
+
+
 
 instance (P.Eq (Computation r Double (D r Double))) => Epsilon (D r Double) (Computation r Double (D r Double)) r Double where
   nearZero a = do
@@ -262,6 +263,9 @@ instance (P.Eq (Computation r Float (D r Float))) => Epsilon (D r Float) (Comput
     pa <- positive a
     P.pure $ P.not na P.|| pa
 
+
+
+
 instance (P.Eq (Computation r Double (D r Double))) => Epsilon (Computation r Double (D r Double)) (D r Double) r Double where
   nearZero a = do
     ca <- abs a
@@ -276,6 +280,22 @@ instance (P.Eq (Computation r Double (D r Double))) => Epsilon (Computation r Do
     na <- nearZero a
     pa <- positive a
     P.pure $ P.not na P.|| pa
+
+instance (P.Eq (Computation r Double (D r Double))) => Epsilon (Computation r Double (D r Double)) (Computation r Double (D r Double)) r Double where
+  nearZero a = do
+    ca <- abs a
+    P.pure (ca <= (D 1e-12 :: D r Double))
+  aboutEqual a b = nearZero $ a - b
+  positive a = P.pure $ (a == abs a)
+  veryPositive a = do
+    na <- nearZero a
+    pa <- positive a
+    P.pure $ P.not na && pa
+  veryNegative a = do
+    na <- nearZero a
+    pa <- positive a
+    P.pure $ P.not na P.|| pa
+
 
 instance (P.Eq (Computation r Float (D r Float))) => Epsilon (Computation r Float (D r Float)) (D r Float) r Float where
   nearZero a = do
