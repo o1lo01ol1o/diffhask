@@ -10,11 +10,12 @@
 
 -- | Algebra for Representable numbers
 module Internal.NumHask.Algebra.Module
-  ( AdditiveModule(..)
-  , AdditiveGroupModule(..)
-  , MultiplicativeModule(..)
-  , MultiplicativeGroupModule(..)
-  , Banach(..)
+  ( --AdditiveModule(..)
+  --, AdditiveGroupModule(..)
+  --, MultiplicativeModule(..)
+  --, MultiplicativeGroupModule(..)
+  --,
+  Banach(..)
   , Hilbert(..)
   , type (><)
   , TensorProduct(..)
@@ -26,7 +27,7 @@ import           Internal.NumHask.Algebra.Field
 import           Internal.NumHask.Algebra.Metric
 import           Internal.NumHask.Algebra.Multiplicative
 import           Internal.NumHask.Algebra.Ring
-import           Protolude                               (Double, Float, Int,
+import           NumHask.Prelude                               (Double, Float, Int,
                                                           Integer)
 
 

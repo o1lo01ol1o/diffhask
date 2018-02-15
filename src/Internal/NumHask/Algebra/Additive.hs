@@ -1,4 +1,5 @@
 {-# OPTIONS_GHC -Wall #-}
+{-# LANGUAGE ConstraintKinds        #-}
 {-# LANGUAGE DataKinds              #-}
 {-# LANGUAGE FlexibleContexts       #-}
 {-# LANGUAGE FlexibleInstances      #-}
@@ -23,20 +24,35 @@ module Internal.NumHask.Algebra.Additive
   , AdditiveRightCancellative(..)
   , AdditiveLeftCancellative(..)
   , AdditiveGroup(..)
+  , AdditiveGroupModule(..)
+  , AdditiveBasis(..)
+  , AdditiveModule(..)
+  , Add(..)
+  , Negate(..)
+  , AdditiveBasisConstraints
   ) where
 import           Internal.Internal
-import           Protolude         (Bool (..), Double, Float, Int, Integer,
+import           NumHask.Prelude   (Bool (..), Double, Float, Int, Integer,
                                     Show, pure, ($))
-import qualified Protolude         as P
- 
-import qualified NumHask.Prelude as E
+import qualified NumHask.Prelude   as P
+import qualified NumHask.Array as A
+import qualified NumHask.Prelude   as E
 
+type AdditiveBasisConstraints r t
+   = ( E.Num t
+     , E.AdditiveBasis r t
+     , E.AdditiveGroupBasis r t
+     , E.AdditiveGroupModule r t
+     , E.AdditiveModule r t)
 -- | 'plus' is used as the operator for the additive magma to distinguish from '+' which, by convention, implies commutativity
 --
 -- > ∀ a,b ∈ A: a `plus` b ∈ A
 --
 -- law is true by construction in Haskell
-class AdditiveMagma a b r t | a b -> t, a -> t, b -> t, a -> r, b -> r, a b -> r where -- Fundep: r and t can be determined by a, b, or a and b:  scalar ops don't change shape and must have the same representation.
+class AdditiveMagma a b r t | a b -> t, a -> t, b -> t
+  --, a -> r, b -> r
+  , a b -> r
+    where -- Fundep: r and t can be determined by a, b, or a and b:  scalar ops don't change shape and must have the same representation.
   plus :: a -> b -> Computation r t (D r t)
 
 
@@ -164,49 +180,49 @@ data Negate = Negate deriving Show
 
 
 
-instance AdditiveMagma (Computation r Float (D r Float)) (Computation r Float (D r Float)) r Float where
+instance (AdditiveBasisConstraints r Float) => AdditiveMagma (Computation r Float (D r Float)) (Computation r Float (D r Float)) r Float where
   plus a b = do
     aa <- a
     bb <- b
     binOp Add aa bb
 
-instance AdditiveMagma (Computation r Float (D r Float)) (D r Float) r Float where
+instance (AdditiveBasisConstraints r Float) => AdditiveMagma (Computation r Float (D r Float)) (D r Float) r Float where
   plus a b = do
     aa <- a
     binOp Add aa b
 
-instance AdditiveMagma (D r Float) (Computation r Float (D r Float)) r Float where
+instance (AdditiveBasisConstraints r Float) => AdditiveMagma (D r Float) (Computation r Float (D r Float)) r Float where
   plus a b = do
     bb <- b
     binOp Add a bb
 
-instance AdditiveMagma (D r Float) (D r Float) r Float where
+instance (AdditiveBasisConstraints r Float) => AdditiveMagma (D r Float) (D r Float) r Float where
   plus= binOp Add
 
-instance AdditiveMagma (Computation r Double (D r Double)) (Computation r Double (D r Double)) r Double where
+instance (AdditiveBasisConstraints r Double) => AdditiveMagma (Computation r Double (D r Double)) (Computation r Double (D r Double)) r Double where
   plus a b = do
     aa <- a
     bb <- b
     binOp Add aa bb
 
-instance AdditiveMagma (Computation r Double (D r Double)) (D r Double) r Double where
+instance (AdditiveBasisConstraints r Double) => AdditiveMagma (Computation r Double (D r Double)) (D r Double) r Double where
   plus a b = do
     aa <- a
     binOp Add aa b
 
-instance AdditiveMagma (D r Double) (Computation r Double (D r Double)) r Double where
+instance (AdditiveBasisConstraints r Double) => AdditiveMagma (D r Double) (Computation r Double (D r Double)) r Double where
   plus a b = do
     bb <- b
     binOp Add a bb
 
-instance AdditiveMagma (D r Double) (D r Double) r Double where
+instance (AdditiveBasisConstraints r Double) => AdditiveMagma (D r Double) (D r Double) r Double where
   plus = binOp Add
 
-instance (P.Num a) => BinOp Add a where
+instance (E.Additive a) => BinOp Add a where
   {-# INLINE ff_bin #-}
   ff_bin _ a b = b P.+ a
 
-instance FfBin Add a r where
+instance (E.AdditiveBasis r a, E.AdditiveModule r a) => FfBin Add a r where
   {-# INLINE rff_bin #-}
   rff_bin _ a b = a E..+. b
   {-# INLINE r_ff_bin #-}
@@ -223,7 +239,7 @@ instance DfDbBin Add r (D r a) a where
   {-# INLINE df_db #-}
   df_db _ _ _ _ bt = pure bt
 
-instance (P.Num a) => DfBin Add  r (D r a) (D r a) a where
+instance (E.AdditiveBasis r a, E.AdditiveModule r a, E.Num a) => DfBin Add  r (D r a) (D r a) a where
   {-# INLINE fd_bin #-}
   fd_bin _ a b = binOp Add a b
   {-# INLINE df_dab #-}
@@ -234,101 +250,102 @@ instance  Trace Add r a where
   resetEl (B _ a b) = pure [a, b, a, b]
 
 
-instance AdditiveUnital (D r Double) r Double where
+instance (AdditiveBasisConstraints r Double) =>
+         AdditiveUnital (D r Double) r Double where
   zero = D 0
 
-instance AdditiveUnital  (D r Float) r Float where
+instance (AdditiveBasisConstraints r Float) => AdditiveUnital  (D r Float) r Float where
   zero = D 0
 
-instance AdditiveUnital  (Computation r Double (D r Double)) r Double where
+instance (AdditiveBasisConstraints r Double) => AdditiveUnital  (Computation r Double (D r Double)) r Double where
   zero = P.pure P.$ D 0
 
-instance AdditiveUnital (Computation r Float (D r Float)) r Float where
+instance (AdditiveBasisConstraints r Float) => AdditiveUnital (Computation r Float (D r Float)) r Float where
   zero = P.pure P.$ D 0
 
 
-instance AdditiveAssociative (D r Double) r Double
+instance (AdditiveBasisConstraints r Double) => AdditiveAssociative (D r Double) r Double
 
-instance AdditiveAssociative (Computation r Double (D r Double)) r Double
+instance (AdditiveBasisConstraints r Double) => AdditiveAssociative (Computation r Double (D r Double)) r Double
 
-instance AdditiveAssociative (D r Float) r Float
+instance (AdditiveBasisConstraints r Float) => AdditiveAssociative (D r Float) r Float
 
-instance AdditiveAssociative (Computation r Float (D r Float)) r Float
+instance (AdditiveBasisConstraints r Float) => AdditiveAssociative (Computation r Float (D r Float)) r Float
 
-instance AdditiveCommutative (D r Double) r Double
+instance (AdditiveBasisConstraints r Double) => AdditiveCommutative (D r Double) r Double
 
-instance AdditiveCommutative (D r Float) r Float
+instance (AdditiveBasisConstraints r Float) => AdditiveCommutative (D r Float) r Float
 
-instance AdditiveCommutative (Computation r Double (D r Double)) r Double
+instance (AdditiveBasisConstraints r Double) => AdditiveCommutative (Computation r Double (D r Double)) r Double
 
-instance AdditiveCommutative (Computation r Float (D r Float)) r Float
+instance (AdditiveBasisConstraints r Float) => AdditiveCommutative (Computation r Float (D r Float)) r Float
 
-instance AdditiveInvertible (Computation r Double (D r Double)) r Double where
+instance (AdditiveBasisConstraints r Double) => AdditiveInvertible (Computation r Double (D r Double)) r Double where
   negate a = do
     aa <- a
     monOp Negate aa
 
-instance AdditiveInvertible  (Computation r Float (D r Float)) r Float where
+instance (AdditiveBasisConstraints r Float) => AdditiveInvertible  (Computation r Float (D r Float)) r Float where
   negate a = do
     aa <- a
     monOp Negate aa
 
-instance AdditiveInvertible  (D r Double) r Double where
+instance (AdditiveBasisConstraints r Double) => AdditiveInvertible  (D r Double) r Double where
   negate = monOp Negate
 
-instance AdditiveInvertible   (D r Float) r Float where
+instance (AdditiveBasisConstraints r Float) => AdditiveInvertible   (D r Float) r Float where
   negate = monOp Negate
 
-instance (P.Num a) => FfMon Negate a where
+instance (E.AdditiveInvertible a) => FfMon Negate a where
   {-# INLINE ff #-}
   ff _ a = P.negate a
 
-instance (AdditiveInvertible (D r a) r a, P.Num a) => MonOp Negate r a where
+instance (E.AdditiveInvertible a, AdditiveInvertible (D r a) r a, E.Num a) => MonOp Negate r a where
   {-# INLINE fd #-}
   fd _ a = monOp Negate a
   {-# INLINE df #-}
   df _ _ _ at = monOp Negate at
 
 
-instance (AdditiveInvertible (D r a) r a, P.Num a) => Trace Negate r a where
+instance (AdditiveInvertible (D r a) r a, E.Num a) => Trace Negate r a where
   pushEl (U _ a) dA = do
     cda <- negate dA
     pure [(cda, a)]
   resetEl (U _ a) = pure [a]
 
 
-instance Additive (D r Double) (D r Double) r Double
+instance (AdditiveBasisConstraints r Double) => Additive (D r Double) (D r Double) r Double
 
-instance Additive (Computation r Double (D r Double)) (D r Double) r Double
+instance (AdditiveBasisConstraints r Double) => Additive (Computation r Double (D r Double)) (D r Double) r Double
 
-instance Additive (D r Double) (Computation r Double (D r Double)) r Double
+instance (AdditiveBasisConstraints r Double) => Additive (D r Double) (Computation r Double (D r Double)) r Double
 
-instance Additive (D r Float) (D r Float) r Float
+instance (AdditiveBasisConstraints r Float) => Additive (D r Float) (D r Float) r Float
 
-instance Additive (D r Float) (Computation r Float (D r Float)) r Float
+instance (AdditiveBasisConstraints r Float) => Additive (D r Float) (Computation r Float (D r Float)) r Float
 
-instance Additive (Computation r Float (D r Float)) (D r Float) r Float
+instance (AdditiveBasisConstraints r Float) => Additive (Computation r Float (D r Float)) (D r Float) r Float
 
-instance Additive (Computation r Double (D r Double)) (Computation r Double (D r Double)) r Double
+instance (AdditiveBasisConstraints r Double) => Additive (Computation r Double (D r Double)) (Computation r Double (D r Double)) r Double
 
 
-instance Additive (Computation r Float (D r Float)) (Computation r Float (D r Float)) r Float
+instance (AdditiveBasisConstraints r Float) => Additive (Computation r Float (D r Float)) (Computation r Float (D r Float)) r Float
 
-instance AdditiveGroup (D r Double) (D r Double) r Double
+instance (AdditiveBasisConstraints r Double) => AdditiveGroup (D r Double) (D r Double) r Double
 
-instance AdditiveGroup (Computation r Double (D r Double)) (D r Double) r Double
+instance (AdditiveBasisConstraints r Double) => AdditiveGroup (Computation r Double (D r Double)) (D r Double) r Double
 
-instance AdditiveGroup (D r Double) (Computation r Double (D r Double)) r Double
+instance (AdditiveBasisConstraints r Double) => AdditiveGroup (D r Double) (Computation r Double (D r Double)) r Double
 
-instance AdditiveGroup (D r Float) (D r Float) r Float
+instance (AdditiveBasisConstraints r Float) => AdditiveGroup (D r Float) (D r Float) r Float
 
-instance AdditiveGroup (D r Float) (Computation r Float (D r Float)) r Float
+instance (AdditiveBasisConstraints r Float) => AdditiveGroup (D r Float) (Computation r Float (D r Float)) r Float
 
-instance AdditiveGroup (Computation r Float (D r Float)) (D r Float) r Float
+instance (AdditiveBasisConstraints r Float) => AdditiveGroup (Computation r Float (D r Float)) (D r Float) r Float
 
-instance AdditiveGroup (Computation r Double (D r Double)) (Computation r Double (D r Double)) r Double
+instance (AdditiveBasisConstraints r Double) => AdditiveGroup (Computation r Double (D r Double)) (Computation r Double (D r Double)) r Double
 
-instance AdditiveGroup (Computation r Float (D r Float)) (Computation r Float (D r Float)) r Float
+instance (AdditiveBasisConstraints r Float) => AdditiveGroup (Computation r Float (D r Float)) (Computation r Float (D r Float)) r Float
 
 
 -- | Additive Module Laws
@@ -345,6 +362,74 @@ class (Additive a b r t) =>
   (+.) :: a -> b -> Computation r t (D r t)
 
 
+instance (AdditiveBasisConstraints (A.Array c s) Double) =>
+         AdditiveModule (A.Array c s) (Computation (A.Array c s) Double  (D (A.Array c s) Double)) (D (A.Array c s) Double)  Double where
+  (.+) a b = do
+    ca <- a
+    binOp Add ca b
+  (+.) a b = do
+    ca <- a
+    binOp Add ca b
+
+instance (AdditiveBasisConstraints (A.Array c s) Double) =>
+         AdditiveModule (A.Array c s) (Computation (A.Array c s) Double (D (A.Array c s) Double)) (Computation (A.Array c s) Double (D (A.Array c s) Double)) Double where
+  (.+) a b = do
+    ca <- a
+    cb <- b
+    binOp Add ca cb
+  (+.) a b = do
+    ca <- a
+    cb <- b
+    binOp Add ca cb
+
+
+instance (AdditiveBasisConstraints (A.Array c s) Double) =>
+         AdditiveModule (A.Array c s) (D (A.Array c s) Double) (D (A.Array c s) Double) Double where
+  (.+) a b = binOp Add a b
+  (+.) a b = binOp Add a b
+
+instance (AdditiveBasisConstraints (A.Array c s) Double) =>
+         AdditiveModule (A.Array c s) (D (A.Array c s) Double) (Computation (A.Array c s) Double  (D (A.Array c s) Double)) Double where
+  (.+) a b = do
+    cb <- b
+    binOp Add a cb
+  (+.) a b = do
+    cb <- b
+    binOp Add a cb
+
+instance (AdditiveBasisConstraints (A.Array c s) Float) =>
+         AdditiveModule (A.Array c s) (D (A.Array c s) Float) (D (A.Array c s) Float) Float where
+  (.+) a b = binOp Add a b
+  (+.) a b = binOp Add a b
+
+instance (AdditiveBasisConstraints (A.Array c s) Float) =>
+         AdditiveModule (A.Array c s) (D (A.Array c s) Float) (Computation (A.Array c s) Float  (D (A.Array c s) Float)) Float where
+  (.+) a b = do
+    cb <- b
+    binOp Add a cb
+  (+.) a b = do
+    cb <- b
+    binOp Add a cb
+
+instance (AdditiveBasisConstraints (A.Array c s) Float) =>
+         AdditiveModule (A.Array c s) (Computation (A.Array c s) Float  (D (A.Array c s) Float)) (D (A.Array c s) Float)  Float where
+  (.+) a b = do
+    ca <- a
+    binOp Add ca b
+  (+.) a b = do
+    ca <- a
+    binOp Add ca b
+
+instance (AdditiveBasisConstraints (A.Array c s) Float) =>
+         AdditiveModule (A.Array c s) (Computation (A.Array c s) Float (D (A.Array c s) Float)) (Computation (A.Array c s) Float (D (A.Array c s) Float)) Float where
+  (.+) a b = do
+    ca <- a
+    cb <- b
+    binOp Add ca cb
+  (+.) a b = do
+    ca <- a
+    cb <- b
+    binOp Add ca cb
 -- | Subtraction Module Laws
 --
 -- > (a + b) .- c == a + (b .- c)
@@ -358,6 +443,89 @@ class (AdditiveGroup a b r t) =>
   infixl 6 -.
   (-.) ::   a -> b -> Computation r t (D r t)
 
+
+instance (AdditiveBasisConstraints (A.Array c s) Float) =>
+         AdditiveGroupModule (A.Array c s) (D (A.Array c s) Float) (D (A.Array c s) Float) Float where
+  (.-) a b = do
+    cb <- (negate b)
+    binOp Add a cb
+  (-.) a b = do
+    cb <- negate b
+    binOp Add a cb
+
+instance (AdditiveBasisConstraints (A.Array c s) Float) =>
+         AdditiveGroupModule (A.Array c s) (D (A.Array c s) Float) (Computation (A.Array c s) Float  (D (A.Array c s) Float)) Float where
+  (.-) a b = do
+    cb <- negate b
+    binOp Add a cb
+  (-.) a b = do
+    cb <- negate b
+    binOp Add a cb
+
+instance (AdditiveBasisConstraints (A.Array c s) Float) =>
+         AdditiveGroupModule (A.Array c s) (Computation (A.Array c s) Float  (D (A.Array c s) Float)) (D (A.Array c s) Float)  Float where
+  (.-) a b = do
+    ca <- a
+    cb <- negate b
+    binOp Add ca cb
+  (-.) a b = do
+    ca <- a
+    cb <- negate b
+    binOp Add ca cb
+
+instance (AdditiveBasisConstraints (A.Array c s) Float) =>
+         AdditiveGroupModule (A.Array c s) (Computation (A.Array c s) Float (D (A.Array c s) Float)) (Computation (A.Array c s) Float (D (A.Array c s) Float)) Float where
+  (.-) a b = do
+    ca <- a
+    cb <- negate b
+    binOp Add ca cb
+  (-.) a b = do
+    ca <-  a
+    cb <- negate b
+    binOp Add ca cb
+
+
+
+instance (AdditiveBasisConstraints (A.Array c s) Double) =>
+         AdditiveGroupModule (A.Array c s) (D (A.Array c s) Double) (D (A.Array c s) Double) Double where
+  (.-) a b = do
+    cb <- (negate b)
+    binOp Add a cb
+  (-.) a b = do
+    cb <- negate b
+    binOp Add a cb
+
+instance (AdditiveBasisConstraints (A.Array c s) Double) =>
+         AdditiveGroupModule (A.Array c s) (D (A.Array c s) Double) (Computation (A.Array c s) Double  (D (A.Array c s) Double)) Double where
+  (.-) a b = do
+    cb <- negate b
+    binOp Add a cb
+  (-.) a b = do
+    cb <- negate b
+    binOp Add a cb
+
+instance (AdditiveBasisConstraints (A.Array c s) Double) =>
+         AdditiveGroupModule (A.Array c s) (Computation (A.Array c s) Double  (D (A.Array c s) Double)) (D (A.Array c s) Double)  Double where
+  (.-) a b = do
+    ca <-  a
+    cb <- negate b
+    binOp Add ca cb
+  (-.) a b = do
+    ca <-  a
+    cb <- negate b
+    binOp Add ca cb
+
+instance (AdditiveBasisConstraints (A.Array c s) Double) =>
+         AdditiveGroupModule (A.Array c s) (Computation (A.Array c s) Double (D (A.Array c s) Double)) (Computation (A.Array c s) Double (D (A.Array c s) Double)) Double where
+  (.-) a b = do
+    ca <- a
+    cb <- negate b
+    binOp Add ca cb
+  (-.) a b = do
+    ca <- a
+    cb <- negate b
+    binOp Add ca cb
+
 -- | element by element addition
 --
 -- > (a .+. b) .+. c == a .+. (b .+. c)
@@ -369,6 +537,61 @@ class (Additive a b r t) =>
   infixl 7 .+.
   (.+.) :: a -> b -> Computation r t (D r t)
 
+instance (AdditiveBasisConstraints (A.Array c s) Double) =>
+         AdditiveBasis (A.Array c s) (D (A.Array c s) Double) (D (A.Array c s) Double) Double where
+  (.+.) a b = 
+    binOp Add a b
+
+
+instance (AdditiveBasisConstraints (A.Array c s) Double) =>
+         AdditiveBasis (A.Array c s) (D (A.Array c s) Double) (Computation (A.Array c s) Double  (D (A.Array c s) Double)) Double where
+  (.+.) a b = do
+    cb <-  b
+    binOp Add a cb
+
+
+instance (AdditiveBasisConstraints (A.Array c s) Double) =>
+         AdditiveBasis (A.Array c s) (Computation (A.Array c s) Double  (D (A.Array c s) Double)) (D (A.Array c s) Double)  Double where
+  (.+.) a b = do
+    ca <-  a
+    binOp Add ca b
+
+
+instance (AdditiveBasisConstraints (A.Array c s) Double) =>
+         AdditiveBasis (A.Array c s) (Computation (A.Array c s) Double (D (A.Array c s) Double)) (Computation (A.Array c s) Double (D (A.Array c s) Double)) Double where
+  (.+.) a b = do
+    ca <- a
+    cb <-  b
+    binOp Add ca cb
+
+
+instance (AdditiveBasisConstraints (A.Array c s) Float) =>
+         AdditiveBasis (A.Array c s) (D (A.Array c s) Float) (D (A.Array c s) Float) Float where
+  (.+.) a b = 
+    binOp Add a b
+
+
+instance (AdditiveBasisConstraints (A.Array c s) Float) =>
+         AdditiveBasis (A.Array c s) (D (A.Array c s) Float) (Computation (A.Array c s) Float  (D (A.Array c s) Float)) Float where
+  (.+.) a b = do
+    cb <-  b
+    binOp Add a cb
+
+
+instance (AdditiveBasisConstraints (A.Array c s) Float) =>
+         AdditiveBasis (A.Array c s) (Computation (A.Array c s) Float  (D (A.Array c s) Float)) (D (A.Array c s) Float)  Float where
+  (.+.) a b = do
+    ca <-  a
+    binOp Add ca b
+
+
+instance (AdditiveBasisConstraints (A.Array c s) Float) =>
+         AdditiveBasis (A.Array c s) (Computation (A.Array c s) Float (D (A.Array c s) Float)) (Computation (A.Array c s) Float (D (A.Array c s) Float)) Float where
+  (.+.) a b = do
+    ca <- a
+    cb <-  b
+    binOp Add ca cb
+
 
 
 -- | element by element subtraction
@@ -378,3 +601,62 @@ class (AdditiveGroup a b r t ) =>
       AdditiveGroupBasis r a b t where
   infixl 6 .-.
   (.-.) :: a -> b -> Computation r t (D r t)
+
+instance (AdditiveBasisConstraints (A.Array c s) Float) =>
+         AdditiveGroupBasis (A.Array c s) (D (A.Array c s) Float) (D (A.Array c s) Float) Float where
+  (.-.) a b = do
+    cb <- negate b
+    binOp Add a cb
+
+
+instance (AdditiveBasisConstraints (A.Array c s) Float) =>
+         AdditiveGroupBasis (A.Array c s) (D (A.Array c s) Float) (Computation (A.Array c s) Float  (D (A.Array c s) Float)) Float where
+  (.-.) a b = do
+    cb <- negate b
+    binOp Add a cb
+
+
+instance (AdditiveBasisConstraints (A.Array c s) Float) =>
+         AdditiveGroupBasis (A.Array c s) (Computation (A.Array c s) Float  (D (A.Array c s) Float)) (D (A.Array c s) Float)  Float where
+  (.-.) a b = do
+    ca <-  a
+    cb <- negate b
+    binOp Add ca cb
+
+
+instance (AdditiveBasisConstraints (A.Array c s) Float) =>
+         AdditiveGroupBasis (A.Array c s) (Computation (A.Array c s) Float (D (A.Array c s) Float)) (Computation (A.Array c s) Float (D (A.Array c s) Float)) Float where
+  (.-.) a b = do
+    ca <- a
+    cb <-  negate b
+    binOp Add ca cb
+
+
+instance (AdditiveBasisConstraints (A.Array c s) Double) =>
+         AdditiveGroupBasis (A.Array c s) (D (A.Array c s) Double) (D (A.Array c s) Double) Double where
+  (.-.) a b = do
+    cb <- negate b
+    binOp Add a cb
+
+
+instance (AdditiveBasisConstraints (A.Array c s) Double) =>
+         AdditiveGroupBasis (A.Array c s) (D (A.Array c s) Double) (Computation (A.Array c s) Double  (D (A.Array c s) Double)) Double where
+  (.-.) a b = do
+    cb <- negate b
+    binOp Add a cb
+
+
+instance (AdditiveBasisConstraints (A.Array c s) Double) =>
+         AdditiveGroupBasis (A.Array c s) (Computation (A.Array c s) Double  (D (A.Array c s) Double)) (D (A.Array c s) Double)  Double where
+  (.-.) a b = do
+    ca <-  a
+    cb <- negate b
+    binOp Add ca cb
+
+
+instance (AdditiveBasisConstraints (A.Array c s) Double) =>
+         AdditiveGroupBasis (A.Array c s) (Computation (A.Array c s) Double (D (A.Array c s) Double)) (Computation (A.Array c s) Double (D (A.Array c s) Double)) Double where
+  (.-.) a b = do
+    ca <- a
+    cb <-  negate b
+    binOp Add ca cb

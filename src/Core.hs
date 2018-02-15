@@ -24,147 +24,147 @@ import           Internal.NumHask.Prelude   hiding (State, diff, evalState,
                                              runState)
 import           Lens.Micro                 ((%~), (&), (.~), (^.))
 import           Prelude                    (error)
-import qualified Protolude                  as P
+import qualified NumHask.Prelude                  as P
 
 --FIXME: prune redundancy
 
-type AdditiveDifferentiable t r
-  = ( 
-     AdditiveMagma (D r t) (D r t) r t
-     , AdditiveMagma (Computation r t (D r t)) (D r t) r t
-     , AdditiveMagma (Computation r t (D r t)) (Computation r t (D r t)) r t
-     , AdditiveMagma (D r t) (Computation r t (D r t)) r t
+-- type AdditiveDifferentiable t r
+--   = (
+--      AdditiveMagma (D r t) (D r t) r t
+--      , AdditiveMagma (Computation r t (D r t)) (D r t) r t
+--      , AdditiveMagma (Computation r t (D r t)) (Computation r t (D r t)) r t
+--      , AdditiveMagma (D r t) (Computation r t (D r t)) r t
 
-     , AdditiveAssociative (D r t) r t
-     , AdditiveAssociative (Computation r t (D r t)) r t
+--      , AdditiveAssociative (D r t) r t
+--      , AdditiveAssociative (Computation r t (D r t)) r t
 
-     , AdditiveCommutative (D r t) r t
-     , AdditiveCommutative (Computation r t (D r t)) r t
+--      , AdditiveCommutative (D r t) r t
+--      , AdditiveCommutative (Computation r t (D r t)) r t
 
-     , AdditiveInvertible (D r t) r t
-     , AdditiveInvertible (Computation r t (D r t)) r t
+--      , AdditiveInvertible (D r t) r t
+--      , AdditiveInvertible (Computation r t (D r t)) r t
 
-     , AdditiveIdempotent (D r t) (D r t) r t
-     , AdditiveIdempotent (Computation r t (D r t)) (D r t) r t
-     , AdditiveIdempotent (Computation r t (D r t)) (Computation r t (D r t)) r t
-     , AdditiveIdempotent (D r t) (Computation r t (D r t)) r t
+--      , AdditiveIdempotent (D r t) (D r t) r t
+--      , AdditiveIdempotent (Computation r t (D r t)) (D r t) r t
+--      , AdditiveIdempotent (Computation r t (D r t)) (Computation r t (D r t)) r t
+--      , AdditiveIdempotent (D r t) (Computation r t (D r t)) r t
 
-     , Additive (D r t) (D r t) r t
-     , Additive (Computation r t (D r t)) (D r t) r t
-     , Additive (Computation r t (D r t)) (Computation r t (D r t)) r t
-     , Additive (D r t) (Computation r t (D r t)) r t
+--      , Additive (D r t) (D r t) r t
+--      , Additive (Computation r t (D r t)) (D r t) r t
+--      , Additive (Computation r t (D r t)) (Computation r t (D r t)) r t
+--      , Additive (D r t) (Computation r t (D r t)) r t
 
-     , AdditiveLeftCancellative (D r t) (D r t) r t
-     , AdditiveLeftCancellative (Computation r t (D r t)) (D r t) r t
-     , AdditiveLeftCancellative (Computation r t (D r t)) (Computation r t (D r t)) r t
-     , AdditiveLeftCancellative (D r t) (Computation r t (D r t)) r t
+--      , AdditiveLeftCancellative (D r t) (D r t) r t
+--      , AdditiveLeftCancellative (Computation r t (D r t)) (D r t) r t
+--      , AdditiveLeftCancellative (Computation r t (D r t)) (Computation r t (D r t)) r t
+--      , AdditiveLeftCancellative (D r t) (Computation r t (D r t)) r t
 
-     , AdditiveGroup (D r t) (D r t) r t
-     , AdditiveGroup (Computation r t (D r t)) (D r t) r t
-     , AdditiveGroup (Computation r t (D r t)) (Computation r t (D r t)) r t
-     , AdditiveGroup (D r t) (Computation r t (D r t)) r t
-     )
+--      , AdditiveGroup (D r t) (D r t) r t
+--      , AdditiveGroup (Computation r t (D r t)) (D r t) r t
+--      , AdditiveGroup (Computation r t (D r t)) (Computation r t (D r t)) r t
+--      , AdditiveGroup (D r t) (Computation r t (D r t)) r t
+--      )
 
-type MultiplicativeDifferential t r
-  = (MultiplicativeMagma (D r t) (D r t) r t
-     , MultiplicativeMagma (Computation r t (D r t)) (D r t) r t
-     , MultiplicativeMagma (Computation r t (D r t)) (Computation r t (D r t)) r t
-     , MultiplicativeMagma (D r t) (Computation r t (D r t)) r t
+-- type MultiplicativeDifferential t r
+--   = (MultiplicativeMagma (D r t) (D r t) r t
+--      , MultiplicativeMagma (Computation r t (D r t)) (D r t) r t
+--      , MultiplicativeMagma (Computation r t (D r t)) (Computation r t (D r t)) r t
+--      , MultiplicativeMagma (D r t) (Computation r t (D r t)) r t
 
-     , MultiplicativeUnital (D r t) r t
-     , MultiplicativeUnital (Computation r t (D r t)) r t
+--      , MultiplicativeUnital (D r t) r t
+--      , MultiplicativeUnital (Computation r t (D r t)) r t
 
-     , MultiplicativeAssociative (D r t) r t
-     , MultiplicativeAssociative (Computation r t (D r t)) r t
+--      , MultiplicativeAssociative (D r t) r t
+--      , MultiplicativeAssociative (Computation r t (D r t)) r t
 
-     , MultiplicativeCommutative (D r t) r t
-     , MultiplicativeCommutative (Computation r t (D r t)) r t
+--      , MultiplicativeCommutative (D r t) r t
+--      , MultiplicativeCommutative (Computation r t (D r t)) r t
 
-     , MultiplicativeInvertible (D r t) r t
-     , MultiplicativeInvertible (Computation r t (D r t)) r t
+--      , MultiplicativeInvertible (D r t) r t
+--      , MultiplicativeInvertible (Computation r t (D r t)) r t
 
-     , Multiplicative (D r t) (D r t) r t
-     , Multiplicative (Computation r t (D r t)) (D r t) r t
-     , Multiplicative (Computation r t (D r t)) (Computation r t (D r t)) r t
-     , Multiplicative (D r t) (Computation r t (D r t)) r t
+--      , Multiplicative (D r t) (D r t) r t
+--      , Multiplicative (Computation r t (D r t)) (D r t) r t
+--      , Multiplicative (Computation r t (D r t)) (Computation r t (D r t)) r t
+--      , Multiplicative (D r t) (Computation r t (D r t)) r t
 
-     , MultiplicativeLeftCancellative (D r t) (D r t) r t
-     , MultiplicativeLeftCancellative (Computation r t (D r t)) (D r t) r t
-     , MultiplicativeLeftCancellative (Computation r t (D r t)) (Computation r t (D r t)) r t
-     , MultiplicativeLeftCancellative (D r t) (Computation r t (D r t)) r t
+--      , MultiplicativeLeftCancellative (D r t) (D r t) r t
+--      , MultiplicativeLeftCancellative (Computation r t (D r t)) (D r t) r t
+--      , MultiplicativeLeftCancellative (Computation r t (D r t)) (Computation r t (D r t)) r t
+--      , MultiplicativeLeftCancellative (D r t) (Computation r t (D r t)) r t
 
-     , MultiplicativeRightCancellative (D r t) (D r t) r t
-     , MultiplicativeRightCancellative (Computation r t (D r t)) (D r t) r t
-     , MultiplicativeRightCancellative (Computation r t (D r t)) (Computation r t (D r t)) r t
-     , MultiplicativeRightCancellative (D r t) (Computation r t (D r t)) r t
+--      , MultiplicativeRightCancellative (D r t) (D r t) r t
+--      , MultiplicativeRightCancellative (Computation r t (D r t)) (D r t) r t
+--      , MultiplicativeRightCancellative (Computation r t (D r t)) (Computation r t (D r t)) r t
+--      , MultiplicativeRightCancellative (D r t) (Computation r t (D r t)) r t
 
-     , MultiplicativeGroup (D r t) (D r t) r t
-     , MultiplicativeGroup (Computation r t (D r t)) (D r t) r t
-     , MultiplicativeGroup (Computation r t (D r t)) (Computation r t (D r t)) r t
-     , MultiplicativeGroup (D r t) (Computation r t (D r t)) r t)
+--      , MultiplicativeGroup (D r t) (D r t) r t
+--      , MultiplicativeGroup (Computation r t (D r t)) (D r t) r t
+--      , MultiplicativeGroup (Computation r t (D r t)) (Computation r t (D r t)) r t
+--      , MultiplicativeGroup (D r t) (Computation r t (D r t)) r t)
 
-type Differentiable t r
-   = ( MultiplicativeDifferential t r
-     , AdditiveDifferentiable t r
-     , Distribution (D r t) (D r t) r t
-     , Distribution (Computation r t (D r t)) (D r t) r t
-     , Distribution (Computation r t (D r t)) (Computation r t (D r t)) r t
-     , Distribution (D r t) (Computation r t (D r t)) r t
+-- type Differentiable t r
+--    = ( MultiplicativeDifferential t r
+--      , AdditiveDifferentiable t r
+--      , Distribution (D r t) (D r t) r t
+--      , Distribution (Computation r t (D r t)) (D r t) r t
+--      , Distribution (Computation r t (D r t)) (Computation r t (D r t)) r t
+--      , Distribution (D r t) (Computation r t (D r t)) r t
 
-     , Semifield (D r t) (D r t) r t
-     , Semifield (Computation r t (D r t)) (D r t) r t
-     , Semifield (Computation r t (D r t)) (Computation r t (D r t)) r t
-     , Semifield (D r t) (Computation r t (D r t)) r t
+--      , Semifield (D r t) (D r t) r t
+--      , Semifield (Computation r t (D r t)) (D r t) r t
+--      , Semifield (Computation r t (D r t)) (Computation r t (D r t)) r t
+--      , Semifield (D r t) (Computation r t (D r t)) r t
 
-     , Field (D r t) (D r t) r t
-     , Field (Computation r t (D r t)) (D r t) r t
-     , Field (Computation r t (D r t)) (Computation r t (D r t)) r t
-     , Field (D r t) (Computation r t (D r t)) r t
+--      , Field (D r t) (D r t) r t
+--      , Field (Computation r t (D r t)) (D r t) r t
+--      , Field (Computation r t (D r t)) (Computation r t (D r t)) r t
+--      , Field (D r t) (Computation r t (D r t)) r t
 
-     , ExpField (D r t) r t
-     , ExpField (Computation r t (D r t)) r t
+--      , ExpField (D r t) r t
+--      , ExpField (Computation r t (D r t)) r t
 
-     , BoundedField (D r t) r t
-     , BoundedField (Computation r t (D r t)) r t
+--      , BoundedField (D r t) r t
+--      , BoundedField (Computation r t (D r t)) r t
 
-     , TrigField (D r t) r t
-     , TrigField (Computation r t (D r t)) r t
+--      , TrigField (D r t) r t
+--      , TrigField (Computation r t (D r t)) r t
 
-     , Signed (D r t) r t
-     , Signed (Computation r t (D r t)) r t
+--      , Signed (D r t) r t
+--      , Signed (Computation r t (D r t)) r t
 
-     , Normed (D r t) r t
-     , Normed (Computation r t (D r t)) r t
+--      , Normed (D r t) r t
+--      , Normed (Computation r t (D r t)) r t
 
-     , Metric (D r t) (D r t) r t
-     , Metric (Computation r t (D r t)) (D r t) r t
-     , Metric (Computation r t (D r t)) (Computation r t (D r t)) r t
-     , Metric (D r t) (Computation r t (D r t)) r t
+     -- , Metric (D r t) (D r t) r t
+     -- , Metric (Computation r t (D r t)) (D r t) r t
+     -- , Metric (Computation r t (D r t)) (Computation r t (D r t)) r t
+     -- , Metric (D r t) (Computation r t (D r t)) r t
 
-     , Epsilon (D r t) (D r t) r t
-     , Epsilon (Computation r t (D r t)) (D r t) r t
-     , Epsilon (Computation r t (D r t)) (Computation r t (D r t)) r t
-     , Epsilon (D r t) (Computation r t (D r t)) r t
+     -- , Epsilon (D r t) (D r t) r t
+     -- , Epsilon (Computation r t (D r t)) (D r t) r t
+     -- , Epsilon (Computation r t (D r t)) (Computation r t (D r t)) r t
+     -- , Epsilon (D r t) (Computation r t (D r t)) r t
 
-     , Ring (D r t) (D r t) r t
-     , Ring (Computation r t (D r t)) (D r t) r t
-     , Ring (Computation r t (D r t)) (Computation r t (D r t)) r t
-     , Ring (D r t) (Computation r t (D r t)) r t
+     -- , Ring (D r t) (D r t) r t
+     -- , Ring (Computation r t (D r t)) (D r t) r t
+     -- , Ring (Computation r t (D r t)) (Computation r t (D r t)) r t
+     -- , Ring (D r t) (Computation r t (D r t)) r t
 
-     , CRing (D r t) (D r t) r t
-     , CRing (Computation r t (D r t)) (D r t) r t
-     , CRing (Computation r t (D r t)) (Computation r t (D r t)) r t
-     , CRing (D r t) (Computation r t (D r t)) r t
+     -- , CRing (D r t) (D r t) r t
+     -- , CRing (Computation r t (D r t)) (D r t) r t
+     -- , CRing (Computation r t (D r t)) (Computation r t (D r t)) r t
+     -- , CRing (D r t) (Computation r t (D r t)) r t
 
-     , StarSemiring (D r t) r t
-     , StarSemiring (Computation r t (D r t)) r t
+     -- , StarSemiring (D r t) r t
+     -- , StarSemiring (Computation r t (D r t)) r t
 
-     , KleeneAlgebra (D r t) (D r t) r t
-     , KleeneAlgebra (Computation r t (D r t)) (D r t) r t
-     , KleeneAlgebra (Computation r t (D r t)) (Computation r t (D r t)) r t
-     , KleeneAlgebra (D r t) (Computation r t (D r t)) r t
+     -- , KleeneAlgebra (D r t) (D r t) r t
+     -- , KleeneAlgebra (Computation r t (D r t)) (D r t) r t
+     -- , KleeneAlgebra (Computation r t (D r t)) (Computation r t (D r t)) r t
+     -- , KleeneAlgebra (D r t) (Computation r t (D r t)) r t
 
-     )
+     -- )
 
 
 
@@ -179,8 +179,8 @@ t =
     DR {} -> error "Can't get tangent of a reverse node"
 
 
-initComp :: (P.RealFrac a)=> ComputationState r a
-initComp = ComputationState (Tag 0) (UID 0) M.empty M.empty (1e-6) 1000
+initComp :: forall a r. (P.Fractional a) => ComputationState r a
+initComp = ComputationState (Tag 0) (UID 0) M.empty M.empty (1e-6 :: a) 1000
 
 
 mkForward :: () => Tag -> Tangent r a -> Primal r a  -> D r a

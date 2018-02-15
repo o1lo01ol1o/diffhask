@@ -28,11 +28,9 @@ import           Internal.Internal
 import           Internal.NumHask.Algebra.Additive
 import           Internal.NumHask.Algebra.Multiplicative
 import           Internal.NumHask.Algebra.Ring
-import           Protolude                      (Bool, Double, Float)
-import           Protolude                      (pure, ($), Show)
-import qualified Protolude                      as P
-
-
+import           NumHask.Prelude                      (Bool, Double, Float)
+import           NumHask.Prelude                      (pure, ($), Show)
+import qualified NumHask.Prelude                      as P
 
 -- | A Semifield is a Field without Commutative Multiplication.
 class (MultiplicativeInvertible a r t, Ring a b r t) =>
@@ -319,40 +317,40 @@ data ATan = ATan deriving Show
 data SinH = SinH deriving Show
 data CosH = CosH deriving Show
 
-instance Semifield (D r Double) (D r Double) r Double
+instance (BasisConstraints r Double) => Semifield (D r Double) (D r Double) r Double
 
-instance Semifield (Computation r Double (D r Double)) (D r Double) r Double
+instance (BasisConstraints r Double) => Semifield (Computation r Double (D r Double)) (D r Double) r Double
 
-instance Semifield (D r Double) (Computation r Double (D r Double)) r Double
+instance (BasisConstraints r Double) => Semifield (D r Double) (Computation r Double (D r Double)) r Double
 
-instance Semifield (D r Float) (D r Float) r Float
+instance (BasisConstraints r Float) => Semifield (D r Float) (D r Float) r Float
 
-instance Semifield (D r Float) (Computation r Float (D r Float)) r Float
+instance (BasisConstraints r Float) => Semifield (D r Float) (Computation r Float (D r Float)) r Float
 
-instance Semifield (Computation r Float (D r Float)) (D r Float) r Float
+instance (BasisConstraints r Float) => Semifield (Computation r Float (D r Float)) (D r Float) r Float
 
-instance Semifield (Computation r Double (D r Double)) (Computation r Double (D r Double)) r Double
+instance (BasisConstraints r Double) => Semifield (Computation r Double (D r Double)) (Computation r Double (D r Double)) r Double
 
-instance Semifield (Computation r Float (D r Float)) (Computation r Float (D r Float)) r Float
+instance (BasisConstraints r Float) => Semifield (Computation r Float (D r Float)) (Computation r Float (D r Float)) r Float
 
-instance Field (D r Double) (D r Double) r Double
+instance (BasisConstraints r Double) => Field (D r Double) (D r Double) r Double
 
-instance Field (Computation r Double (D r Double)) (D r Double) r Double
+instance (BasisConstraints r Double) => Field (Computation r Double (D r Double)) (D r Double) r Double
 
-instance Field (D r Double) (Computation r Double (D r Double)) r Double
+instance (BasisConstraints r Double) => Field (D r Double) (Computation r Double (D r Double)) r Double
 
-instance Field (D r Float) (D r Float) r Float
+instance (BasisConstraints r Float) => Field (D r Float) (D r Float) r Float
 
-instance Field (D r Float) (Computation r Float (D r Float)) r Float
+instance (BasisConstraints r Float) => Field (D r Float) (Computation r Float (D r Float)) r Float
 
-instance Field (Computation r Float (D r Float)) (D r Float) r Float
+instance (BasisConstraints r Float) => Field (Computation r Float (D r Float)) (D r Float) r Float
 
-instance Field (Computation r Double (D r Double)) (Computation r Double (D r Double)) r Double
+instance (BasisConstraints r Double) => Field (Computation r Double (D r Double)) (Computation r Double (D r Double)) r Double
 
-instance Field (Computation r Float (D r Float)) (Computation r Float (D r Float)) r Float
+instance (BasisConstraints r Float) => Field (Computation r Float (D r Float)) (Computation r Float (D r Float)) r Float
 
 
-instance ExpField (Computation r Double (D r Double)) r Double where
+instance (BasisConstraints r Double) => ExpField (Computation r Double (D r Double)) r Double where
   log a = do
     aa <- a
     monOp Log aa
@@ -360,7 +358,7 @@ instance ExpField (Computation r Double (D r Double)) r Double where
     aa <- a
     monOp Exp aa
 
-instance ExpField (Computation r Float (D r Float)) r Float where
+instance (BasisConstraints r Float) => ExpField (Computation r Float (D r Float)) r Float where
   log a = do
     aa <- a
     monOp Log aa
@@ -368,11 +366,11 @@ instance ExpField (Computation r Float (D r Float)) r Float where
     aa <- a
     monOp Exp aa
 
-instance ExpField (D r Double) r Double where
+instance (BasisConstraints r Double) => ExpField (D r Double) r Double where
   log = monOp Log
   exp = monOp Exp
 
-instance ExpField (D r Float) r Float where
+instance (BasisConstraints r Float) => ExpField (D r Float) r Float where
   log = monOp Log
   exp = monOp Exp
 
@@ -380,7 +378,7 @@ instance ExpField (D r Float) r Float where
 -- | Exponentiation
 -- >>> compute $ diff' (\x -> x + ) a
 -- (D 6.0,D 1.0)
-instance ( P.Floating t
+instance ( P.ExpField t
          , ExpField (D r t) r t
          , MultiplicativeGroup (D r t) (Computation r t (D r t)) r t
          , ExpField (Computation r t (D r t)) r t
@@ -393,7 +391,7 @@ instance ( P.Floating t
   {-# INLINE df #-}
   df _ cp ap at = at / (ap * (log10Val))
 
-instance (P.Floating t) => FfMon Exp t where
+instance (P.ExpField t) => FfMon Exp t where
   {-# INLINE ff #-}
   ff _ a = P.exp a
 
@@ -404,7 +402,7 @@ instance (MultiplicativeGroup (D r t) (D r t) r t) => Trace Exp r t where
   resetEl (U _ a) = pure [a]
 
 
-instance ( P.Floating t
+instance ( P.ExpField t
          , ExpField (D r t) r t
          , MultiplicativeGroup (D r t) (Computation r t (D r t)) r t
          , ExpField (Computation r t (D r t)) r t
@@ -418,7 +416,7 @@ instance ( P.Floating t
   df _ cp ap at = at / ap
 
 
-instance (P.Floating a) => FfMon Log a where
+instance (P.ExpField a) => FfMon Log a where
   {-# INLINE ff #-}
   ff _ a = P.log a
 
@@ -431,6 +429,7 @@ instance (MultiplicativeGroup (D r t) (D r t) r t) => Trace Log r t where
 
 
 instance ( BoundedField (D r Double) r Double
+         , BasisConstraints r Double
          , ExpField (Computation r Double (D r Double)) r Double
          , Additive ((D r Double)) ((D r Double)) r Double
          , Additive (D r Double) ((D r Double)) r Double
@@ -462,6 +461,7 @@ instance ( BoundedField (D r Double) r Double
 
 
 instance (BoundedField (D r Float) r Float
+         , BasisConstraints r Float
          , ExpField (Computation r Float (D r Float)) r Float
          , Additive (D r Float) (D r Float) r Float
          , Additive (D r Float) (D r Float) r Float
@@ -504,6 +504,7 @@ instance ( BoundedField (D r t)  r t
          , ExpField (Computation r t (D r t)) r t
          , a ~ Computation r Double (D r Double)
          , t ~ Double
+         , BasisConstraints r Double
          ) =>
          TrigField (Computation r Double (D r Double)) r Double where
   
@@ -555,6 +556,7 @@ instance ( BoundedField (D r t)  r t
          , ExpField (Computation r t (D r t)) r t
          , a ~ Computation r Float (D r Float)
          , t ~ Float
+         ,  BasisConstraints r Float
          ) =>
          TrigField (Computation r Float (D r Float)) r Float where
   
@@ -591,7 +593,7 @@ instance ( BoundedField (D r t)  r t
           (log (z + (one :: D r Float)) - log (z - (one :: D r Float)))
       
 instance (TrigField (D r t)  r t
-         , P.Floating t
+         , P.TrigField t
          , Multiplicative (D r t) (Computation r t (D r t)) r t
          , MonOp Cos r t
          , Trace Cos r t
@@ -604,7 +606,7 @@ instance (TrigField (D r t)  r t
   df _ _ ap at = at * (monOp Cos ap)
 
 instance (
-         P.Floating a
+         P.TrigField a
          ) =>
          FfMon Sin a where
     {-# INLINE ff #-}
@@ -621,7 +623,7 @@ instance (TrigField (D r t)  r t, Multiplicative (D r t) (Computation r t (D r t
 
 
 instance (TrigField (D r t)  r t
-         , P.Floating t
+         , P.TrigField t
          , Multiplicative (D r t) (Computation r t (D r t))  r t
          , Multiplicative (Computation r t (D r t)) (Computation r t (D r t))  r t
          , MonOp Cos r t
@@ -637,7 +639,7 @@ instance (TrigField (D r t)  r t
 
 
 
-instance (P.Floating a
+instance (P.TrigField a
          ) =>
          FfMon Cos a where
   {-# INLINE ff #-}
@@ -656,7 +658,7 @@ instance (AdditiveInvertible (Computation r t (D r t))  r t
 
 
 instance (TrigField (D r t)  r t
-         , P.Floating t
+         , P.TrigField t
          , Multiplicative (D r t) (Computation r t (D r t))  r t
          , Multiplicative (Computation r t (D r t)) (Computation r t (D r t))  r t
          , MultiplicativeGroup (D r t) (Computation r t (D r t))  r t
@@ -671,7 +673,7 @@ instance (TrigField (D r t)  r t
   {-# INLINE df #-}
   df _ _ ap at = at / sqrt ((one :: D r t) - ap * ap)
 
-instance (P.Floating a) => FfMon ASin a where
+instance (P.TrigField a) => FfMon ASin a where
   {-# INLINE ff #-}
   ff _ a = P.asin a
 
@@ -692,7 +694,7 @@ instance (AdditiveInvertible (Computation r t (D r t))  r t
 
 
 instance (TrigField (D r t)  r t
-         , P.Floating t
+         , P.TrigField t
          , Multiplicative (D r t) (Computation r t (D r t))  r t
          , Multiplicative (Computation r t (D r t)) (Computation r t (D r t))  r t
          , MultiplicativeGroup (D r t) (Computation r t (D r t))  r t
@@ -707,7 +709,7 @@ instance (TrigField (D r t)  r t
   {-# INLINE df #-}
   df _ _ ap at = negate $ at / sqrt ((one :: D r t) - ap * ap)
 
-instance (P.Floating a) => FfMon ACos a where
+instance (P.TrigField a) => FfMon ACos a where
   {-# INLINE ff #-}
   ff _ a = P.acos a
 
@@ -728,7 +730,7 @@ instance (AdditiveInvertible (Computation r t (D r t))  r t
 
 
 instance (TrigField (D r t)  r t
-         , P.Floating t
+         , P.TrigField t
          , Multiplicative (D r t) (Computation r t (D r t))  r t
          , Multiplicative (Computation r t (D r t)) (Computation r t (D r t))  r t
          , MultiplicativeGroup (D r t) (Computation r t (D r t))  r t
@@ -745,7 +747,7 @@ instance (TrigField (D r t)  r t
 
 
 
-instance (P.Floating a) => FfMon ATan a where
+instance (P.TrigField a) => FfMon ATan a where
   {-# INLINE ff #-}
   ff _ a = P.atan a
 
@@ -763,7 +765,7 @@ instance (AdditiveInvertible (Computation r t (D r t))  r t
   resetEl (U _ a) = pure [a]
 
 instance ( TrigField (D r t)  r t
-         , P.Floating t
+         , P.TrigField t
          , Multiplicative (D r t) (Computation r t (D r t))  r t
          , Multiplicative (Computation r t (D r t)) (Computation r t (D r t))  r t
          , MultiplicativeGroup (D r t) (Computation r t (D r t))  r t
@@ -778,7 +780,7 @@ instance ( TrigField (D r t)  r t
   {-# INLINE df #-}
   df _ _ ap at = at * (cosh ap)
 
-instance (P.Floating a) => FfMon SinH a where
+instance (P.TrigField a) => FfMon SinH a where
   {-# INLINE ff #-}
   ff _ a = P.sinh a
 
@@ -798,7 +800,7 @@ instance (AdditiveInvertible (Computation r t (D r t))  r t
   resetEl (U _ a) = pure [a]
 
 instance (TrigField (D r t)  r t
-         , P.Floating t
+         , P.TrigField t
          , Multiplicative (D r t) (Computation r t (D r t))  r t
          , Multiplicative (Computation r t (D r t)) (Computation r t (D r t))  r t
          , MultiplicativeGroup (D r t) (Computation r t (D r t))  r t
@@ -813,7 +815,7 @@ instance (TrigField (D r t)  r t
   {-# INLINE df #-}
   df _ _ ap at = at * (sinh ap)
 
-instance (P.Floating a ) => FfMon CosH a where
+instance (P.TrigField a ) => FfMon CosH a where
   {-# INLINE ff #-}
   ff _ a = P.cosh a
 

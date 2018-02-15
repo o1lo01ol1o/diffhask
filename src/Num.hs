@@ -17,8 +17,6 @@ import           Internal.NumHask.Prelude            hiding (State, diff, evalSt
 import qualified NumHask.Prelude  as P
 import Internal.Internal
 
-
-
 data FixPoint = FixPoint deriving Show
 
 fpPush ::

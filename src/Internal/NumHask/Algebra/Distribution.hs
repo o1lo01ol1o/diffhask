@@ -1,4 +1,5 @@
 {-# OPTIONS_GHC -Wall #-}
+{-# LANGUAGE FlexibleContexts       #-}
 {-# LANGUAGE FlexibleInstances      #-}
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE MultiParamTypeClasses  #-}
@@ -11,7 +12,7 @@ module Internal.NumHask.Algebra.Distribution
 import           Internal.Internal
 import           Internal.NumHask.Algebra.Additive
 import           Internal.NumHask.Algebra.Multiplicative
-import           Protolude                               (Double, Float)
+import           NumHask.Prelude                         (Double, Float)
 
 -- | Distribution (and annihilation) laws
 --
@@ -22,20 +23,20 @@ import           Protolude                               (Double, Float)
 class (Additive a b r t, MultiplicativeMagma a b r t) =>
       Distribution a b r t
 
-instance Distribution (D r Double) (D r Double) r Double
+instance (BasisConstraints r Double ) => Distribution (D r Double) (D r Double) r Double
 
-instance Distribution (Computation r Double (D r Double)) (D r Double) r Double
+instance (BasisConstraints r Double ) => Distribution (Computation r Double (D r Double)) (D r Double) r Double
 
-instance Distribution (D r Double) (Computation r Double (D r Double)) r Double
+instance (BasisConstraints r Double ) => Distribution (D r Double) (Computation r Double (D r Double)) r Double
 
-instance Distribution (D r Float) (D r Float) r Float
+instance (BasisConstraints r Float ) => Distribution (D r Float) (D r Float) r Float
 
-instance Distribution (D r Float) (Computation r Float (D r Float)) r Float
+instance (BasisConstraints r Float ) =>  Distribution (D r Float) (Computation r Float (D r Float)) r Float
 
-instance Distribution (Computation r Float (D r Float)) (D r Float) r Float
+instance (BasisConstraints r Float ) =>  Distribution (Computation r Float (D r Float)) (D r Float) r Float
 
-instance Distribution (Computation r Double (D r Double)) (Computation r Double (D r Double)) r Double
+instance (BasisConstraints r Double ) => Distribution (Computation r Double (D r Double)) (Computation r Double (D r Double)) r Double
 
-instance Distribution (Computation r Float (D r Float)) (Computation r Float (D r Float)) r Float
+instance (BasisConstraints r Float ) =>  Distribution (Computation r Float (D r Float)) (Computation r Float (D r Float)) r Float
 
 

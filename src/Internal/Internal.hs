@@ -25,17 +25,19 @@ import qualified Data.Map                   as M (Map, empty, insert, lookup,
                                                   update, updateLookupWithKey)
 import           Lens.Micro                 ((%~), (&), (.~), (^.))
 import           Lens.Micro.TH              (makeLenses)
-import           Prelude                    hiding (abs, negate, signum, (*),
-                                             (+), (-), (/))
-import qualified Protolude                  as P
-import qualified NumHask.Prelude as E
-
-import           Data.Dependent.Sum
-import           Data.Functor.Identity
-import           Data.GADT.Compare
-import           Data.GADT.Compare.TH
-import           Data.GADT.Show
-import           Data.GADT.Show.TH
+import           NumHask.Prelude            hiding (State, abs, negate, signum,
+                                             (*), (+), (-), (/), Show, show)
+import Protolude.Error
+import qualified NumHask.Prelude            as E
+import qualified NumHask.Prelude            as P
+import GHC.Show
+import GHC.Err
+-- import           Data.Dependent.Sum
+-- import           Data.Functor.Identity
+-- import           Data.GADT.Compare
+-- import           Data.GADT.Compare.TH
+-- import           Data.GADT.Show
+-- import           Data.GADT.Show.TH
 
 
 data ComputationState r a = ComputationState
@@ -56,10 +58,10 @@ data D r a where
   DR :: (Show op, Trace op r a) => D r a -> DualTrace op r a -> Tag -> UID -> D r a
 
 instance (Show a, Show Tag, Show UID, Show (r a)) => Show (D r a) where
-  show (D a)            = "D " ++ show a
-  show (Dm a)           = "D " ++ show (a)
-  show (DF p t ti)      = "DF " ++ show p ++ show t ++ show ti
-  show (DR p dt ti uid) = "DR " ++ show p ++ show dt ++ show ti ++ show uid
+  show (D a)            = "D " ++ GHC.Show.show a
+  show (Dm a)           = "D " ++  GHC.Show.show (a)
+  show (DF p t ti)      = "DF " ++  GHC.Show.show p ++  GHC.Show.show t ++  GHC.Show.show ti
+  show (DR p dt ti uid) = "DR " ++  GHC.Show.show p ++  GHC.Show.show dt ++  GHC.Show.show ti ++  GHC.Show.show uid
 
 type Primal r a = D r a
 type Tangent r a = D r a
@@ -195,11 +197,11 @@ class DfDbBin op r a c | a -> c where
 
 class (Show op, E.AdditiveBasis r a, E.AdditiveModule r a) => FfBin op a r where
   rff_bin :: op -> r a -> r a -> r a -- Forward mode function for arrays
-  rff_bin op _ _ = error $ "array x array operation is not defined for " ++ (show op)
+  rff_bin op _ _ = GHC.Err.error $ "array x array operation is not defined for " ++ ( GHC.Show.show op)
   r_ff_bin :: op -> r a -> a -> r a -- For scalar x arrays
-  r_ff_bin op _ _ = error $ "array x scalar operation is not defined for " ++ (show op)
+  r_ff_bin op _ _ =  GHC.Err.error $ "array x scalar operation is not defined for " ++ ( GHC.Show.show op)
   _ff_bin :: op -> a -> r a -> r a -- For scalar x arrays
-  _ff_bin op _ _ = error $ "scalar x array operation is not defined for " ++ (show op)
+  _ff_bin op _ _ =  GHC.Err.error $ "scalar x array operation is not defined for " ++ ( GHC.Show.show op)
 
 
 
@@ -295,7 +297,7 @@ class (Show op) =>
                 cdf <- df_da op b cp ap at
                 return $ DF cp (cdf) ai
               EQ ->
-                error "Forward and reverse AD r cannot run on the same level."
+                 GHC.Err.error "Forward and reverse AD r cannot run on the same level."
       DR ap _ ai _ ->
         case b of
           D _ -> do
@@ -306,7 +308,7 @@ class (Show op) =>
             r (fda) (B op a b) ai
           DF bp bt bi ->
             case compare ai bi of
-              EQ -> error "Forward and reverse AD cannot run on the same level."
+              EQ ->  GHC.Err.error "Forward and reverse AD cannot run on the same level."
               LT -> do
                 cp <- fd_bin op a bp
                 cdf <- df_db op a cp bp bt

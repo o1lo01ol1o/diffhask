@@ -18,9 +18,9 @@ module Internal.NumHask.Algebra.Metric
 import Internal.NumHask.Algebra.Additive
 import Internal.NumHask.Algebra.Field
 import Internal.NumHask.Algebra.Multiplicative
-import qualified Protolude as P
+import qualified NumHask.Prelude as P
 import Internal.Internal
-import Protolude
+import NumHask.Prelude
        (Bool(..), Double, Eq(..), Float, Int, Integer, Ord(..), ($), (&&))
 
 -- | 'signum' from base is not an operator replicated in numhask, being such a very silly name, and preferred is the much more obvious 'sign'.  Compare with 'Norm' and 'Banach' where there is a change in codomain
@@ -32,9 +32,6 @@ class (MultiplicativeUnital a  r t) =>
       Signed a  r t where
   sign :: a -> Computation r t (D r t) 
   abs :: a -> Computation r t (D r t)
-
-
-
 
 
 -- | Like Signed, except the codomain can be different to the domain.
@@ -76,21 +73,21 @@ data Abs = Abs deriving P.Show
 
 
 
-instance Signed (D r Double) r Double where
+instance (BasisConstraints r Double) => Signed (D r Double) r Double where
   sign a =
     if a >= zero
       then one
       else negate (one :: D r Double)
   abs = monOp Abs
 
-instance Signed (D r Float) r Float where
+instance (BasisConstraints r Float) => Signed (D r Float) r Float where
   sign a =
     if a >= zero
       then one
       else negate (one :: D r Float)
   abs =  monOp Abs
 
-instance Signed (Computation r Double (D r Double)) r Double where
+instance (BasisConstraints r Double) => Signed (Computation r Double (D r Double)) r Double where
   sign a = do
     ca <- a
     if ca >= (zero :: (D r Double))
@@ -102,7 +99,7 @@ instance Signed (Computation r Double (D r Double)) r Double where
 
 
 
-instance Signed (Computation r Float (D r Float)) r Float where
+instance (BasisConstraints r Float) => Signed (Computation r Float (D r Float)) r Float where
   sign a = do
     ca <- a
     if ca >= zero
@@ -116,7 +113,7 @@ instance Signed (Computation r Float (D r Float)) r Float where
 -- | Abs
 --  compute $ diff' abs a
 -- (D 3.0, D 1.0)
-instance (P.Num a, Signed (D r a) r a, AdditiveUnital (D r a) r a, AdditiveInvertible (D r a) r a, P.Ord a, Multiplicative (D r a) (Computation r a (D r a)) r a
+instance (P.AdditiveInvertible a, P.Num a, Signed (D r a) r a, AdditiveUnital (D r a) r a, AdditiveInvertible (D r a) r a, P.Ord a, Multiplicative (D r a) (Computation r a (D r a)) r a
          ) =>
          MonOp Abs r a where
 
@@ -128,7 +125,7 @@ instance (P.Num a, Signed (D r a) r a, AdditiveUnital (D r a) r a, AdditiveInver
   {-# INLINE df #-}
   df _ _ ap at = at * sign ap
   
-instance (P.Num a) => FfMon Abs a where
+instance (P.Signed a) => FfMon Abs a where
   {-# INLINE ff #-}
   ff _ a = P.abs a
 
@@ -140,44 +137,44 @@ instance (Signed (D r a) r a,  Multiplicative (D r a) (D r a) r a) => Trace Abs 
     P.pure [(dl, a)]
   resetEl (U _ a ) = P.pure [a]
 
-instance Normed (D r Double) r Double where
+instance (BasisConstraints r Double) => Normed (D r Double) r Double where
   size = abs
 
-instance Normed (D r Float) r Float where
+instance (BasisConstraints r Float) => Normed (D r Float) r Float where
   size = abs
 
-instance Normed (Computation r Double (D r Double)) r Double where
+instance (BasisConstraints r Double) => Normed (Computation r Double (D r Double)) r Double where
   size = abs
 
-instance Normed (Computation r Float (D r Float)) r Float where
+instance (BasisConstraints r Float) => Normed (Computation r Float (D r Float)) r Float where
   size = abs
 
 
-instance Metric (D r Double) (D r Double) r Double where
+instance (BasisConstraints r Double) => Metric (D r Double) (D r Double) r Double where
   distance a b = abs (a - b)
 
-instance Metric (D r Float) (D r Float) r Float where
+instance (BasisConstraints r Float) => Metric (D r Float) (D r Float) r Float where
   distance a b = abs (a - b)
 
-instance Metric (Computation r Double (D r Double)) (Computation r Double (D r Double)) r Double where
+instance (BasisConstraints r Double) => Metric (Computation r Double (D r Double)) (Computation r Double (D r Double)) r Double where
   distance a b = abs (a - b)
 
-instance Metric (Computation r Float (D r Float)) (Computation r Float (D r Float)) r Float where
+instance (BasisConstraints r Float) => Metric (Computation r Float (D r Float)) (Computation r Float (D r Float)) r Float where
   distance a b = abs (a - b)
 
-instance Metric (D r Double) (Computation r Double (D r Double)) r Double where
+instance (BasisConstraints r Double) => Metric (D r Double) (Computation r Double (D r Double)) r Double where
   distance a b = abs (a - b)
 
-instance Metric (D r Float) (Computation r Float (D r Float)) r Float where
+instance (BasisConstraints r Float) => Metric (D r Float) (Computation r Float (D r Float)) r Float where
   distance a b = abs (a - b)
 
-instance Metric (Computation r Double (D r Double)) (D r Double) r Double where
+instance (BasisConstraints r Double) => Metric (Computation r Double (D r Double)) (D r Double) r Double where
   distance a b = abs (a - b)
 
-instance Metric (Computation r Float (D r Float)) (D r Float) r Float where
+instance (BasisConstraints r Float) => Metric (Computation r Float (D r Float)) (D r Float) r Float where
   distance a b = abs (a - b)
 
-instance (P.Eq (Computation r Double (D r Double))) => Epsilon (D r Double) (D r Double) r Double where
+instance (P.Eq (Computation r Double (D r Double)), BasisConstraints r Double) => Epsilon (D r Double) (D r Double) r Double where
   nearZero a = do
     ca <- abs a
     P.pure (ca <= (D 1e-12 :: D r Double))
@@ -195,7 +192,7 @@ instance (P.Eq (Computation r Double (D r Double))) => Epsilon (D r Double) (D r
     P.pure $ P.not na P.|| pa
 
 
-instance (P.Eq (Computation r Float (D r Float))) => Epsilon (D r Float) (D r Float) r Float where
+instance (P.Eq (Computation r Float (D r Float)), BasisConstraints r Float) => Epsilon (D r Float) (D r Float) r Float where
   nearZero a = do
     ca <- abs a
     P.pure (ca <= (D 1e-6 :: D r Float))
@@ -212,7 +209,7 @@ instance (P.Eq (Computation r Float (D r Float))) => Epsilon (D r Float) (D r Fl
     pa <- positive a
     P.pure $ P.not na P.|| pa
 
-instance (P.Eq (Computation r Float (D r Float))) => Epsilon (Computation r Float (D r Float)) (Computation r Float (D r Float)) r Float where
+instance (P.Eq (Computation r Float (D r Float)), BasisConstraints r Float) => Epsilon (Computation r Float (D r Float)) (Computation r Float (D r Float)) r Float where
   nearZero a = do
     ca <- abs a
     P.pure (ca <= (D 1e-6 :: D r Float))
@@ -229,7 +226,7 @@ instance (P.Eq (Computation r Float (D r Float))) => Epsilon (Computation r Floa
 
 
 
-instance (P.Eq (Computation r Double (D r Double))) => Epsilon (D r Double) (Computation r Double (D r Double)) r Double where
+instance (P.Eq (Computation r Double (D r Double)), BasisConstraints r Double) => Epsilon (D r Double) (Computation r Double (D r Double)) r Double where
   nearZero a = do
     ca <- abs a
     P.pure (ca <= (D 1e-12 :: D r Double))
@@ -246,7 +243,7 @@ instance (P.Eq (Computation r Double (D r Double))) => Epsilon (D r Double) (Com
     pa <- positive a
     P.pure $ P.not na P.|| pa
 
-instance (P.Eq (Computation r Float (D r Float))) => Epsilon (D r Float) (Computation r Float (D r Float)) r Float where
+instance (P.Eq (Computation r Float (D r Float)), BasisConstraints r Float) => Epsilon (D r Float) (Computation r Float (D r Float)) r Float where
   nearZero a = do
     ca <- abs a
     P.pure (ca <= (D 1e-6 :: D r Float))
@@ -266,7 +263,7 @@ instance (P.Eq (Computation r Float (D r Float))) => Epsilon (D r Float) (Comput
 
 
 
-instance (P.Eq (Computation r Double (D r Double))) => Epsilon (Computation r Double (D r Double)) (D r Double) r Double where
+instance (P.Eq (Computation r Double (D r Double)),BasisConstraints r Double) => Epsilon (Computation r Double (D r Double)) (D r Double) r Double where
   nearZero a = do
     ca <- abs a
     P.pure (ca <= (D 1e-12 :: D r Double))
@@ -281,7 +278,7 @@ instance (P.Eq (Computation r Double (D r Double))) => Epsilon (Computation r Do
     pa <- positive a
     P.pure $ P.not na P.|| pa
 
-instance (P.Eq (Computation r Double (D r Double))) => Epsilon (Computation r Double (D r Double)) (Computation r Double (D r Double)) r Double where
+instance (P.Eq (Computation r Double (D r Double)), BasisConstraints r Double) => Epsilon (Computation r Double (D r Double)) (Computation r Double (D r Double)) r Double where
   nearZero a = do
     ca <- abs a
     P.pure (ca <= (D 1e-12 :: D r Double))
@@ -297,7 +294,7 @@ instance (P.Eq (Computation r Double (D r Double))) => Epsilon (Computation r Do
     P.pure $ P.not na P.|| pa
 
 
-instance (P.Eq (Computation r Float (D r Float))) => Epsilon (Computation r Float (D r Float)) (D r Float) r Float where
+instance (P.Eq (Computation r Float (D r Float)), BasisConstraints r Float) => Epsilon (Computation r Float (D r Float)) (D r Float) r Float where
   nearZero a = do
     ca <- abs a
     P.pure (ca <= (D 1e-6 :: D r Float))

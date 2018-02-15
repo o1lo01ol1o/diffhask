@@ -17,7 +17,7 @@ import           Internal.Internal
 import           Internal.NumHask.Algebra.Additive
 import           Internal.NumHask.Algebra.Distribution
 import           Internal.NumHask.Algebra.Multiplicative
-import           Protolude                               (Double, Float)
+import           NumHask.Prelude                               (Double, Float)
 
 -- | Semiring
 class ( MultiplicativeAssociative a r t
@@ -81,53 +81,53 @@ class ( Semiring a a r t
 class (StarSemiring a r t, StarSemiring b r t, AdditiveIdempotent a b r t) =>
       KleeneAlgebra a b r t
 
-instance Semiring (D r Double) (D r Double) r Double
+instance (BasisConstraints r Double) => Semiring (D r Double) (D r Double) r Double
 
-instance Semiring (Computation r Double (D r Double)) (D r Double) r Double
+instance (BasisConstraints r Double) => Semiring (Computation r Double (D r Double)) (D r Double) r Double
 
-instance Semiring (D r Double) (Computation r Double (D r Double)) r Double
+instance (BasisConstraints r Double) => Semiring (D r Double) (Computation r Double (D r Double)) r Double
 
-instance Semiring (D r Float) (D r Float) r Float
+instance (BasisConstraints r Float) =>  Semiring (D r Float) (D r Float) r Float
 
-instance Semiring (D r Float) (Computation r Float (D r Float)) r Float
+instance (BasisConstraints r Float) =>  Semiring (D r Float) (Computation r Float (D r Float)) r Float
 
-instance Semiring (Computation r Float (D r Float)) (D r Float) r Float
+instance (BasisConstraints r Float) => Semiring (Computation r Float (D r Float)) (D r Float) r Float
 
-instance Semiring (Computation r Double (D r Double)) (Computation r Double (D r Double)) r Double
+instance (BasisConstraints r Double) => Semiring (Computation r Double (D r Double)) (Computation r Double (D r Double)) r Double
 
-instance Semiring (Computation r Float (D r Float)) (Computation r Float (D r Float)) r Float
+instance (BasisConstraints r Float) => Semiring (Computation r Float (D r Float)) (Computation r Float (D r Float)) r Float
 
 
 
-instance Ring (D r Double) (D r Double) r Double
+instance (BasisConstraints r Double) =>  Ring (D r Double) (D r Double) r Double
 
-instance Ring (Computation r Double (D r Double)) (D r Double) r Double
+instance (BasisConstraints r Double) => Ring (Computation r Double (D r Double)) (D r Double) r Double
 
-instance Ring (D r Double) (Computation r Double (D r Double)) r Double
+instance (BasisConstraints r Double) =>  Ring (D r Double) (Computation r Double (D r Double)) r Double
 
-instance Ring (D r Float) (D r Float) r Float
+instance (BasisConstraints r Float) => Ring (D r Float) (D r Float) r Float
 
-instance Ring (D r Float) (Computation r Float (D r Float)) r Float
+instance (BasisConstraints r Float) => Ring (D r Float) (Computation r Float (D r Float)) r Float
 
-instance Ring (Computation r Float (D r Float)) (D r Float) r Float
+instance (BasisConstraints r Float) => Ring (Computation r Float (D r Float)) (D r Float) r Float
 
-instance Ring (Computation r Double (D r Double)) (Computation r Double (D r Double)) r Double
+instance (BasisConstraints r Double) => Ring (Computation r Double (D r Double)) (Computation r Double (D r Double)) r Double
 
-instance Ring (Computation r Float (D r Float)) (Computation r Float (D r Float)) r Float
+instance (BasisConstraints r Float) => Ring (Computation r Float (D r Float)) (Computation r Float (D r Float)) r Float
 
-instance CRing (D r Double) (D r Double) r Double
+instance (BasisConstraints r Double) => CRing (D r Double) (D r Double) r Double
 
-instance CRing (Computation r Double (D r Double)) (D r Double) r Double
+instance (BasisConstraints r Double) =>  CRing (Computation r Double (D r Double)) (D r Double) r Double
 
-instance CRing (D r Double) (Computation r Double (D r Double)) r Double
+instance (BasisConstraints r Double) => CRing (D r Double) (Computation r Double (D r Double)) r Double
 
-instance CRing (D r Float) (D r Float) r Float
+instance (BasisConstraints r Float) => CRing (D r Float) (D r Float) r Float
 
-instance CRing (D r Float) (Computation r Float (D r Float)) r Float
+instance (BasisConstraints r Float) => CRing (D r Float) (Computation r Float (D r Float)) r Float
 
-instance CRing (Computation r Float (D r Float)) (D r Float) r Float
+instance (BasisConstraints r Float) => CRing (Computation r Float (D r Float)) (D r Float) r Float
 
-instance CRing (Computation r Double (D r Double)) (Computation r Double (D r Double)) r Double
+instance (BasisConstraints r Double) =>  CRing (Computation r Double (D r Double)) (Computation r Double (D r Double)) r Double
 
-instance CRing (Computation r Float (D r Float)) (Computation r Float (D r Float)) r Float
+instance (BasisConstraints r Float) => CRing (Computation r Float (D r Float)) (Computation r Float (D r Float)) r Float
 
