@@ -64,7 +64,7 @@ class MultiplicativeMagma a b r t | a b -> t, a -> t, b -> t
 -- > a `times` one == a
 class MultiplicativeMagma a a r t=>
       MultiplicativeUnital a r t where
-  one :: a
+  one :: (GetShape a ~ r ) => a
 
 
 
@@ -113,6 +113,7 @@ product ::
      , Multiplicative a (Computation r t (D r t)) r t
      , MultiplicativeUnital a r t
      , P.Foldable f
+     ,  (GetShape a ~ r )
      )
   => f a
   -> Computation r t (D r t)
@@ -134,7 +135,7 @@ class ( MultiplicativeCommutative a r t
       ) =>
       Multiplicative a b r t where
   infixl 7 *
-  (*) :: a -> b -> Computation r t (D r t)
+  (*) :: ( (GetShape a ~ r ),  (GetShape b ~ r )) => a -> b -> Computation r t (D r t)
   a * b = times a b
 
 -- > recip a `times` a = one
@@ -149,7 +150,7 @@ class ( MultiplicativeUnital a r t
       ) =>
       MultiplicativeLeftCancellative a b r t where
   infixl 7 ~/
-  (~/) :: a -> b -> Computation r t (D r t)
+  (~/) :: ( (GetShape a ~ r ),  (GetShape b ~ r )) => a -> b -> Computation r t (D r t)
   a ~/ b = recip b `times` a
 
 -- | Non-commutative right divide
@@ -166,7 +167,7 @@ class ( MultiplicativeUnital a r t
       ) =>
       MultiplicativeRightCancellative a b r t where
   infixl 7 /~
-  (/~) :: a -> b -> Computation r t (D r t)
+  (/~) :: ( (GetShape a ~ r ),  (GetShape b ~ r )) => a -> b -> Computation r t (D r t)
   a /~ b = a `times` recip b
 
 -- | Divide ('/') is reserved for where both the left and right cancellative laws hold.  This then implies that the MultiplicativeGroup is also Abelian.
@@ -183,7 +184,7 @@ class ( Multiplicative a b r t
       ) =>
       MultiplicativeGroup a b r t where
   infixl 7 /
-  (/) :: a -> b -> Computation r t (D r t)
+  (/) :: ( (GetShape a ~ r ),  (GetShape b ~ r )) => a -> b -> Computation r t (D r t)
   (/) a b = a `times` recip b
 
 
@@ -442,7 +443,7 @@ instance (BasisConstraints r Float) => MultiplicativeGroup (Computation r Float 
 -- > c *. (a + b) == (c *. a) + (c *. b)
 -- > a .* zero == zero
 -- > a .* b == b *. a
-class (Multiplicative a b r t) =>
+class (Multiplicative a b r t, ComputeShape (GetShape a) (GetShape b) ~ r) =>
       MultiplicativeModule r a b t where
   infixl 7 .*
   (.*) ::  a -> b -> Computation r t (D r t)
@@ -523,7 +524,7 @@ instance (BasisConstraints (A.Array c s) Double) =>
 --
 -- > nearZero a || a ./ one == a
 -- > b == zero || a ./ b == recip b *. a
-class (MultiplicativeGroup a b r t) =>
+class (MultiplicativeGroup a b r t, ComputeShape (GetShape a) (GetShape b) ~ r) =>
       MultiplicativeGroupModule r a b t where
   infixl 7 ./
   (./) :: a -> b -> Computation r t (D r t)

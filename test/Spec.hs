@@ -1,46 +1,45 @@
-{-# LANGUAGE NoImplicitPrelude#-}
-{-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE DataKinds #-}
-{-# LANGUAGE DeriveFunctor #-}
-{-# LANGUAGE ExistentialQuantification #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE GADTs #-}
+{-# LANGUAGE ConstraintKinds            #-}
+{-# LANGUAGE DataKinds                  #-}
+{-# LANGUAGE DeriveFunctor              #-}
+{-# LANGUAGE ExistentialQuantification  #-}
+{-# LANGUAGE FlexibleContexts           #-}
+{-# LANGUAGE FlexibleInstances          #-}
+{-# LANGUAGE GADTs                      #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE KindSignatures #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE NoImplicitPrelude #-}
-{-# LANGUAGE PolyKinds #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TypeApplications #-}
-{-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE TypeOperators #-}
-{-# LANGUAGE OverloadedLists #-}
-{-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE KindSignatures             #-}
+{-# LANGUAGE MultiParamTypeClasses      #-}
+{-# LANGUAGE NoImplicitPrelude          #-}
+{-# LANGUAGE OverloadedLists            #-}
+{-# LANGUAGE PolyKinds                  #-}
+{-# LANGUAGE ScopedTypeVariables        #-}
+{-# LANGUAGE TypeApplications           #-}
+{-# LANGUAGE TypeFamilies               #-}
+{-# LANGUAGE TypeOperators              #-}
+{-# LANGUAGE UndecidableInstances       #-}
 module Main where
 
 
 -- import Test.DocTest
-import Test.Tasty (testGroup, TestTree,defaultMain) -- (TestTree, defaultMain, testGroup, localOption)
-import Test.Tasty.QuickCheck()
-import Test.Tasty.HUnit (testCase, (@?=))
+import           Test.Tasty               (TestTree, defaultMain, testGroup)
+import           Test.Tasty.HUnit         (testCase, (@?=))
+import           Test.Tasty.QuickCheck    ()
 
-import Internal.Internal
-import Core
-import Num
-import Internal.NumHask.Prelude
+import           Core
+import           Internal.Internal
+import           Internal.NumHask.Prelude
+import           Num (fixPoint)
 -- import NumHask.Array()
-import qualified NumHask.Array as A
+import qualified NumHask.Array            as A
 -- import qualified NumHask.Prelude as E
 
 instance (AdditiveBasisConstraints (A.Array c s) Float) =>
          AdditiveModule (A.Array c s) (D (A.Array c s) Float) (D (A.Array c s) Float) Float where
   (.+) a b = binOp Add a b
   (+.) a b = binOp Add a b
-  
+
 instance (AdditiveBasisConstraints (A.Array c s) Float) =>
          AdditiveBasis (A.Array c s) (D (A.Array c s) Float) (D (A.Array c s) Float) Float where
-  (.+.) a b = 
+  (.+.) a b =
     binOp Add a b
 
 -- simple = go
@@ -53,13 +52,14 @@ instance (AdditiveBasisConstraints (A.Array c s) Float) =>
 --     go :: ((D (A.Array [] '[1]) Float), (D (A.Array [] '[1]) Float))
 --     go = compute $ diff' (fixPoint g (D 1.2 :: D (A.Array [] '[1]) Float)) (D 25.0 :: D (A.Array [] '[1]) Float)
 
-add = let b = D 2 :: (D (A.Array [] '[]) Float)
-          a = D 3 :: (D  (A.Array [] '[0]) Float)
-          c = [3,4] :: A.Array [] '[2] Float
-          d = Dm c :: (D (A.Array [] '[2]) Float)
+add =
+  let b = D 2 :: (D (A.Array [] '[]) Float)
+      a = D 3 :: (D (A.Array r s) Float)
+      c = [3, 4] :: A.Array [] '[ 2] Float
+      d = Dm c :: (D (A.Array [] '[ 2]) Float)
       -- in compute $ diff' (+ a) a
-      in compute $ a +. d
-   
+  in compute $ a +. d
+
 
 unitTests =
   testGroup

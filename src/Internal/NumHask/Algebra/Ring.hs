@@ -3,7 +3,7 @@
 {-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE NoImplicitPrelude     #-}
-
+{-#LANGUAGE TypeFamilies #-}
 -- | Ring classes. A distinguishment is made between Rings and Commutative Rings.
 module Internal.NumHask.Algebra.Ring
   ( Semiring
@@ -68,9 +68,9 @@ class ( Semiring a a r t
       , Additive a a r t)
      =>
       StarSemiring a r t where
-  star :: a -> Computation r t (D r t)
+  star :: ( (GetShape a ~ r )) => a -> Computation r t (D r t)
   star a = (one :: a) + plus' a
-  plus' :: a ->  Computation r t (D r t)
+  plus' ::( (GetShape a ~ r )) => a ->  Computation r t (D r t)
   plus' a = a `times` star a
 
 -- | KleeneAlgebra

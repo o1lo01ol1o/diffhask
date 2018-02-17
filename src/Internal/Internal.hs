@@ -53,13 +53,13 @@ type Computation r a = State (ComputationState r a)
 
 data D r a where
   D :: a -> D r a -- scalar
-  Dm :: r a -> D r a -- array
+  Dm :: ar c s a -> D (ar c) a -- array
   DF :: Primal r a -> Tangent r a -> Tag -> D r a
   DR :: (Show op, Trace op r a) => D r a -> DualTrace op r a -> Tag -> UID -> D r a
 
-instance (Show a, Show Tag, Show UID, Show (r a)) => Show (D r a) where
+instance (Show a, Show Tag, Show UID) => Show (D (r c) a) where
   show (D a)            = "D " ++ GHC.Show.show a
-  show (Dm a)           = "D " ++  GHC.Show.show (a)
+  show (Dm a)           = "Dm " ++  "fixme" -- GHC.Show.show (a)
   show (DF p t ti)      = "DF " ++  GHC.Show.show p ++  GHC.Show.show t ++  GHC.Show.show ti
   show (DR p dt ti uid) = "DR " ++  GHC.Show.show p ++  GHC.Show.show dt ++  GHC.Show.show ti ++  GHC.Show.show uid
 
@@ -67,6 +67,27 @@ type Primal r a = D r a
 type Tangent r a = D r a
 
 type FptNode r a = (D r a, D r a, D r a, D r a) -- nodes needed for a fixpoint evaluation
+
+type family GetShape a where
+  GetShape (D (r c s) t) = s
+  GetShape (Computation (r c s) t v) = s
+
+type family ComputeShape a b where
+  ComputeShape '[] '[] = '[]
+  ComputeShape '[ 0] '[ 0] = '[]
+  ComputeShape '[ 1] '[ 1] = '[]
+  ComputeShape '[ 0] '[ 1] = '[]
+  ComputeShape '[ 1] '[ 0] = '[]
+  ComputeShape '[ 1] '[] = '[]
+  ComputeShape '[] '[ 1] = '[]
+  ComputeShape '[ 0] '[] = '[]
+  ComputeShape '[] '[ 0] = '[]
+  ComputeShape '[] r = r
+  ComputeShape '[ 0] r = r
+  ComputeShape '[ 1] r = r
+  ComputeShape r '[] = r
+  ComputeShape r '[ 0] = r
+  ComputeShape r '[ 1] = r
 
 -- FIXME: singleton types on the DualTrace / Arity combination would restrict at least resetEl to a single possible implementation.
 class Trace op r a where
@@ -87,7 +108,7 @@ data DualTrace op r a where
   IxU :: op -> D r a -> [Int]  -> DualTrace op r a
   FxP :: op -> FptNode r a -> DualTrace op r a
 
-instance (Show op, Show a, Show (r a)) => Show (DualTrace op r a) where
+instance (Show op, Show a, Show (D r a)) => Show (DualTrace op r a) where
   show (N o) = "N " ++ show o
   show (U o t ) = "U " ++ show o ++ show t -- ++ show c
   show (B o t tt) = "B " ++ show o ++ show t ++ show tt
@@ -166,11 +187,11 @@ class FfMon op a where
   ff :: op -> a -> a
 
 class MonOp op r a where
-  rff :: op -> r a -> r a
-  fd :: (Computation r a ~ m) => op -> D r a -> m (D r a)
-  df :: (Computation r a ~ m) => op -> D r a -> D r a -> D r a -> m (D r a)
+  rff ::  op -> r s a -> r o a
+  fd :: (Computation (r) a ~ m) => op -> D r a -> m (D r a)
+  df :: (Computation (r) a ~ m) => op -> D r a -> D r a -> D r a -> m (D r a)
 -- {-#INLINE monOp #-}
-monOp ::
+monOp :: forall op r a.
      (MonOp op r a, FfMon op a, (Trace op r a), Show op)
   => op
   -> D r a
@@ -195,12 +216,21 @@ class DfDbBin op r a c | a -> c where
   df_db ::
        (Computation r c ~ m) => op -> a -> D r c -> D r c -> D r c -> m (D r c)
 
-class (Show op, E.AdditiveBasis r a, E.AdditiveModule r a) => FfBin op a r where
-  rff_bin :: op -> r a -> r a -> r a -- Forward mode function for arrays
+type FfBinBases r c a s t u
+   = ( E.AdditiveBasis (r c s) a
+     , E.AdditiveModule (r c s) a
+     , E.AdditiveBasis (r c t) a
+     , E.AdditiveModule (r c t) a
+     , E.AdditiveBasis (r c u) a
+     , E.AdditiveModule (r c u) a)
+
+
+class (Show op) => FfBin op a ar where
+  rff_bin ::(ar ~ (r c), u ~ ComputeShape s t, FfBinBases r c a s t u) => op -> r c s a -> r c t a -> r c u a -- Forward mode function for arrays: "Array [] '[1,2] Float"
   rff_bin op _ _ = GHC.Err.error $ "array x array operation is not defined for " ++ ( GHC.Show.show op)
-  r_ff_bin :: op -> r a -> a -> r a -- For scalar x arrays
+  r_ff_bin :: (ar ~ (r c), FfBinBases r c a s t t) => op -> r c s a -> a -> r c t a -- For scalar x arrays
   r_ff_bin op _ _ =  GHC.Err.error $ "array x scalar operation is not defined for " ++ ( GHC.Show.show op)
-  _ff_bin :: op -> a -> r a -> r a -- For scalar x arrays
+  _ff_bin :: (ar ~ (r c), FfBinBases r c a s t t) => op -> a -> r c s a -> r c t a -- For scalar x arrays
   _ff_bin op _ _ =  GHC.Err.error $ "scalar x array operation is not defined for " ++ ( GHC.Show.show op)
 
 

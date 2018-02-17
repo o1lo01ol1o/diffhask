@@ -62,7 +62,7 @@ class AdditiveMagma a b r t | a b -> t, a -> t, b -> t
 -- > a `plus` zero == a
 class AdditiveMagma a a r t =>
       AdditiveUnital a r t where
-  zero :: a
+  zero :: (GetShape a ~ r ) => a
 
 -- | Associative magma for addition.
 --
@@ -354,7 +354,7 @@ instance (AdditiveBasisConstraints r Float) => AdditiveGroup (Computation r Floa
 -- > (a + b) .+ c == (a .+ c) + b
 -- > a .+ zero == a
 -- > a .+ b == b +. a
-class (Additive a b r t) =>
+class (Additive a b r t, ComputeShape (GetShape a) (GetShape b) ~ (GetShape (Computation r t (D r t)))) =>
       AdditiveModule r a b t where
   infixl 6 .+
   (.+) ::  a -> b -> Computation r t (D r t)
@@ -362,8 +362,8 @@ class (Additive a b r t) =>
   (+.) :: a -> b -> Computation r t (D r t)
 
 
-instance (AdditiveBasisConstraints (A.Array c s) Double) =>
-         AdditiveModule (A.Array c s) (Computation (A.Array c s) Double  (D (A.Array c s) Double)) (D (A.Array c s) Double)  Double where
+instance (AdditiveBasisConstraints (A.Array c s) Double, ComputeShape s u ~ o) =>
+         AdditiveModule (A.Array c o) (Computation (A.Array c s) Double (D (A.Array c s) Double)) (D (A.Array c u) Double) Double where
   (.+) a b = do
     ca <- a
     binOp Add ca b
@@ -436,7 +436,7 @@ instance (AdditiveBasisConstraints (A.Array c s) Float) =>
 -- > (a + b) .- c == (a .- c) + b
 -- > a .- zero == a
 -- > a .- b == negate b +. a
-class (AdditiveGroup a b r t) =>
+class (AdditiveGroup a b r t, ComputeShape (GetShape a) (GetShape b) ~ (GetShape (Computation r t (D r t)) )) =>
       AdditiveGroupModule r a b t where
   infixl 6 .-
   (.-) ::  a -> b -> Computation r t (D r t)

@@ -79,14 +79,15 @@ class (AdditiveGroup a b r t, MultiplicativeGroup a b r t, Ring a b r t) =>
 class ( Field a a r t
       ) =>
       ExpField a r t where
-  exp :: a -> Computation r t (D r t)
-  log :: a -> Computation r t (D r t)
+  exp ::  a -> Computation r t (D r t)
+  log ::  a -> Computation r t (D r t)
 
 
 logBase ::
      ( ExpField a r t
      , ExpField b r t
      , MultiplicativeGroup (Computation r t (D r t)) (Computation r t (D r t)) r t
+
      )
   => a
   -> b
@@ -104,6 +105,7 @@ sqrt ::
      , MultiplicativeUnital a r t
      , Additive a a r t
      , MultiplicativeGroup a (Computation r t (D r t)) r t
+     , (GetShape a ~ r )
      )
   => a
   -> Computation r t (D r t)
@@ -114,6 +116,8 @@ sqrt a = a ** ((one :: a) / ((one :: a) + (one :: a)))
      , ExpField (Computation r t (D r t)) r t
      , Multiplicative (Computation r t (D r t)) b r t
      , ExpField b r t
+     , (GetShape a ~ r )
+     , (GetShape b ~ r )
      )
   => a
   -> b
@@ -122,19 +126,23 @@ sqrt a = a ** ((one :: a) / ((one :: a) + (one :: a)))
 
 log10Val :: forall r t.
      (
-     ExpField (Computation r t (D r t)) r t
+     ExpField ((D r t)) r t
      , MultiplicativeUnital (Computation r t (D r t)) r t
      , MultiplicativeUnital (D r t)r t
      , Additive (Computation r t (D r t)) (Computation r t (D r t)) r t
      , Additive (D r t) (Computation r t (D r t))r t
+     --, (GetShape (D r t) ~ r )
      )
   => Computation r t (D r t)
-log10Val = log ten
+log10Val = do
+  ct <- ten
+  log ct
 
-ten :: forall t r.
+ten :: forall r t.
      (
        MultiplicativeUnital (Computation r t (D r t)) r t
      , Additive (Computation r t (D r t)) (Computation r t (D r t)) r t
+     --, (GetShape ((Computation r t (D r t))) ~ r )
      )
   => Computation r t (D r t)
 ten = sum $ P.replicate 10 (one :: Computation r t (D r t))
@@ -262,22 +270,23 @@ class ( Field a a r t
       , MultiplicativeGroup (Computation r t (D r t)) (Computation r t (D r t)) r t
       , MultiplicativeUnital ((D r t ))r t
       , ExpField (Computation r t (D r t)) r t
+      --, GetShape a ~ r
       ) =>
       TrigField a r t where
-  pi :: a
-  sin :: a -> Computation r t (D r t)
-  cos :: a -> Computation r t (D r t)
-  tan :: a -> Computation r t (D r t)
+  pi ::   a
+  sin ::  a -> Computation r t (D r t)
+  cos ::  a -> Computation r t (D r t)
+  tan ::  a -> Computation r t (D r t)
   tan x = do
     sx <- sin x
     cx <- cos x
     sx / cx
   asin :: a -> Computation r t (D r t)
-  acos :: a -> Computation r t (D r t)
-  atan :: a -> Computation r t (D r t)
-  sinh :: a -> Computation r t (D r t)
-  cosh :: a -> Computation r t (D r t)
-  tanh :: a -> Computation r t (D r t)
+  acos ::  a -> Computation r t (D r t)
+  atan ::  a -> Computation r t (D r t)
+  sinh ::  a -> Computation r t (D r t)
+  cosh ::  a -> Computation r t (D r t)
+  tanh ::  a -> Computation r t (D r t)
   tanh x = do
     sx <- sinh x
     cx <- cosh x
@@ -290,9 +299,9 @@ class ( Field a a r t
   -- asinh z = log (z + sqrt ((one :: D r t) + z ** ((one :: D r t) + (one :: D r t))))
 
 
-  acosh :: a -> Computation r t (D r t)
+  acosh ::  a -> Computation r t (D r t)
   -- acosh z = log (z + sqrt (z + (one :: D r t)) * sqrt (z - (one :: D r t)))
-  atanh :: a -> Computation r t (D r t)
+  atanh ::  a -> Computation r t (D r t)
   -- atan2 :: a -> a -> a --FIXME: implement in instances
   -- atan2 y x
   --   | x P.> zero = atan (y / x)
@@ -441,6 +450,9 @@ instance ( BoundedField (D r Double) r Double
          , MultiplicativeGroup ((D r Double)) (Computation r Double (D r Double)) r Double
          , MultiplicativeGroup (Computation r Double (D r Double)) (Computation r Double (D r Double)) r Double
          , MultiplicativeUnital (((D r Double))) r Double
+         --, GetShape ((Computation r Double (D r Double))) ~ r
+         --,GetShape (D r Double) ~ r
+         
          ) =>
          TrigField (D r Double) r Double where
   pi = D P.pi
