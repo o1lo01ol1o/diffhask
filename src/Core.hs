@@ -8,6 +8,7 @@
 {-# LANGUAGE NoImplicitPrelude     #-}
 {-# LANGUAGE PolyKinds             #-}
 {-# LANGUAGE ScopedTypeVariables   #-}
+{-# LANGUAGE Rank2Types          #-}
 {-# LANGUAGE TypeFamilies          #-}
 {-# LANGUAGE UndecidableInstances  #-}
 
@@ -25,7 +26,10 @@ import           Internal.NumHask.Prelude   hiding (State, diff, evalState,
 import           Lens.Micro                 ((%~), (&), (.~), (^.))
 import           Prelude                    (error)
 import qualified NumHask.Prelude                  as P
-
+import Data.Unique
+import qualified Data.HMap as HM
+import qualified Data.HKey as HM
+import qualified Data.Variant as DV
 --FIXME: prune redundancy
 
 -- type AdditiveDifferentiable t r
@@ -169,39 +173,42 @@ import qualified NumHask.Prelude                  as P
 
 
 -- Get Tangent
-t :: forall r a. (AdditiveUnital (D r a) r a)
-  => D r a
-  -> Computation r a (Tangent r a)
+t :: forall r s a. (AdditiveUnital (D s r a) r a)
+  => D s r a
+  -> Computation s a (Tangent s r a)
 t =
   \case
-    D _ -> pure (zero :: (Tangent r a))
-    DF _ at _ -> pure (at :: (Tangent r a))
+    D _ -> pure (zero :: (Tangent s r a))
+    DF _ at _ -> pure (at :: (Tangent s r a))
     DR {} -> error "Can't get tangent of a reverse node"
 
 
 initComp :: forall a r. (P.Fractional a) => ComputationState r a
-initComp = ComputationState (Tag 0) (UID 0) M.empty M.empty (1e-6 :: a) 1000
+initComp = ComputationState (Tag 0) (UID 0) M.empty HM.empty M.empty (1e-6 :: a) 1000
 
 
-mkForward :: () => Tag -> Tangent r a -> Primal r a  -> D r a
+mkForward :: () => Tag -> Tangent s r a -> Primal s r a  -> D s r a
 mkForward i tg d  = DF d tg i
 
 
-mkReverse :: ( Trace Noop r a) => Tag -> D r a -> Computation r a (D r a)
+mkReverse :: ( Trace Noop s r a) => Tag -> D s r a -> Computation s a (D s r a)
 mkReverse i d = r d (N Noop) i
 
-instance Trace Noop r a where
-  pushEl _ _ = pure []
-  resetEl _ = pure []
+instance Trace Noop s r a where
+  pushAlg _ _ = pure []
+  resetAlg _ = pure []
 
-addDeltas ::
-     ( Additive (D r a) (D r a) r a
-     , AdditiveModule r (D r a) (D r a) a
-     , AdditiveBasis r (D r a) (D r a) a
+addDeltas :: 
+     ( Additive (D s r a) (D s r a) r a
+     , AdditiveModule r (D s r a) (D s r a) a
+     , AdditiveBasis r (D s r a) (D s r a) a
+     , Additive (D s r a) (D s rr a) rrr a
+     , AdditiveModule rrr (D s r a) (D s rr a) a
+     , AdditiveBasis rrr (D s r a) (D s rr a) a
      )
-  => D r a
-  -> D r a
-  -> Computation r a (D r a)
+  => D s r a
+  -> D s rr a
+  -> Computation s a (D s rrr a)
 addDeltas a b =
   case (a, b) of
     (D xa, D xb)   -> a + b
@@ -210,29 +217,41 @@ addDeltas a b =
     (Dm ma, Dm mb) -> a .+. b
 
 applyDelta ::
-     ( Additive (D r a) (D r a) r a
-     , AdditiveModule r (D r a) (D r a) a
-     , AdditiveBasis r (D r a) (D r a) a
+     ( Additive (D s r a) (D s r a) r a
+     , AdditiveModule r (D s r a) (D s r a) a
+     , AdditiveBasis r (D s r a) (D s r a) a
      )
   => UID
-  -> D r a
-  -> Adjoints r a
-  -> Maybe (Computation r a (D r a))
-applyDelta tag dlta adjs =
-  case M.lookup tag adjs of
-    Just v -> Just rval
-      where rval = do
-              r <- addDeltas v dlta
-              modify
-                (\st -> st & adjoints .~ M.update (const . Just $ r) tag adjs)
-              return r
-    Nothing -> Nothing
+  -> D s r a
+  -> (Computation s a (D s rr a))
+applyDelta uniq dlta = do
+  st <- cGet
+  let adjs = st ^. adjoints
+  let km = st ^. uidKeyMap
+  case M.lookup uniq km of
+    Just (sk) ->
+      case sk of
+        (SomeKey (k :: HM.HKey s (D s rk a))) ->
+          case HM.lookup k adjs of
+            Just (v :: (D s rk a)) -> do
+              (r ::  (D s rd a)) <- addDeltas v dlta
+              nk <- HM.getKey
+              lift $
+                modify
+                  (\st ->
+                     st & adjoints .~ HM.update (const . Just $ r) nk adjs &
+                     uidKeyMap %~
+                     (M.insert uniq (SomeKey nk)))
+              pure r
+            _ -> error "Couldn't find HKey in adjoints!"
+    _ -> error $ "Couldn't find HKey for id " ++ show uniq
+ 
 
-decrementFanout :: UID -> Fanouts -> (Maybe Tag, Fanouts)
+decrementFanout :: UID -> Fanouts s a -> (Maybe Tag, Fanouts s a)
 decrementFanout =
   M.updateLookupWithKey (\_ (Tag v) -> Just . Tag $ v P.- 1)
 
-incrementFanout :: UID -> Computation r a Tag
+incrementFanout :: UID -> Computation s a Tag
 incrementFanout u = do
   st <- get
   let (mf, a) =
@@ -240,20 +259,21 @@ incrementFanout u = do
 
   (case mf of
       Nothing -> do
-        put (st & fanouts %~ M.insert u (Tag 1))
+        cPut (st & fanouts %~ M.insert u (Tag 1))
         return $ Tag 1
       Just f -> do
-        put (st & fanouts %~ const a)
+        cPut (st & fanouts %~ const a)
         return f)
 
-zeroAdj ::
-     forall r a. (AdditiveUnital (D r a) r a)
-  => UID
-  -> Computation r a ()
+zeroAdj :: -- forall r s a. (AdditiveUnital (D s r a) r a)
+  -- =>
+  UID
+  -> Computation s a ()
 zeroAdj uniq = do
-  modify (\st -> st & adjoints %~ M.insert uniq ((zero :: D r a)))
+  (nk :: HM.HKey s (D s r a)) <- HM.getKey
+  lift $ modify (\st -> st & uidKeyMap %~ ( M.insert uniq (SomeKey nk))& adjoints %~ HM.insert nk ((zero :: D s r a)))
 
-reset :: (AdditiveUnital (D r a) r a, Show a) => [D r a] -> Computation r a ()
+reset :: (AdditiveUnital (D s r a) r a, Show a) => [D s r a] -> Computation s a ()
 reset l =
   case l of
     [] -> return ()
@@ -264,30 +284,29 @@ reset l =
           if fanout == Tag 1 then
             do
               zeroAdj uniq
-              x <- resetEl o
+              x <- resetAlg o
               reset $ x `mappend` xs -- verify this
             else reset xs
           reset xs
         _ -> reset xs
 
--- recursively pushes nodes onto the reverse mode stack and evaluates partials
+-- recursively pushes nodes onto the reverse mode stack and composes partials at node
 push ::
-     ( AdditiveUnital (D r a) r a
+     ( AdditiveUnital (D s r a) r a
      , Show a
-     , Additive (D r a) (D r a) r a
-     , AdditiveModule r (D r a) (D r a) a
-     , AdditiveBasis r (D r a) (D r a) a
+     , Additive (D s r a) (D s r a) r a
+     , AdditiveModule r (D s r a) (D s r a) a
+     , AdditiveBasis r (D s r a) (D s r a) a
      )
-  => [(D r a, D r a)]
-  -> Computation r a ()
+  => [(D s r a, D s r a)]
+  -> Computation s a ()
 push l =
   case l of
     [] -> return ()
     ((dl, da):xs) ->
       case da of
         DR _ o _ uniq -> do
-          st <- gets ( ^. adjoints )
-          let mv = applyDelta uniq dl st
+          let mv = applyDelta uniq dl
           case mv of
             Just cdA -> do
               dA <- cdA
@@ -296,146 +315,146 @@ push l =
               put (nst1 & fanouts .~ aa)
               if fn == Tag 0 then
                 do
-                  pd <- pushEl o dA
+                  pd <- pushAlg o dA
                   push $ pd `mappend` xs
                 else push xs
             Nothing -> error "key not found in adjoints!"
         _ -> push xs
 
 reverseReset ::
-     ( AdditiveUnital (D r a) r a
+     ( AdditiveUnital (D s r a) r a
      , Show a
-     , Additive (D r a) (D r a) r a
-     , AdditiveModule r (D r a) (D r a) a
-     , AdditiveBasis r (D r a) (D r a) a
+     , Additive (D s r a) (D s r a) r a
+     , AdditiveModule r (D s r a) (D s r a) a
+     , AdditiveBasis r (D s r a) (D s r a) a
      )
-  => D r a
-  -> Computation r a ()
+  => D s r a
+  -> Computation s a ()
 reverseReset d = do
-  modify (& fanouts .~ M.empty )
+  lift $ modify (& fanouts .~ M.empty )
   reset [ d]
 
 reverseProp ::
-     ( AdditiveUnital (D r a) r a
+     ( AdditiveUnital (D s r a) r a
      , Show a
-     , Additive (D r a) (D r a) r a
-     , AdditiveModule r (D r a) (D r a) a
-     , AdditiveBasis r (D r a) (D r a) a
+     , Additive (D s r a) (D s r a) r a
+     , AdditiveModule r (D s r a) (D s r a) a
+     , AdditiveBasis r (D s r a) (D s r a) a
      )
-  => D r a
-  -> D r a
-  -> Computation r a ()
+  => D s r a
+  -> D s r a
+  -> Computation s a ()
 reverseProp  v d = do
   reverseReset  d
   push [( v,  d)]
 
 {-# INLINE primalTanget #-}
 primalTanget ::
-     (Show a, AdditiveUnital (D r a) r a)
-  => D r a
-  -> Computation r a (D r a, Tangent r a)
+     (Show a, AdditiveUnital (D s r a) r a)
+  => D s r a
+  -> Computation s a (D s r a, Tangent s r a)
 primalTanget d = do
   ct <- t d
   pure (p d, ct)
 
 adjoint ::
-     forall a r. (Show a, AdditiveUnital (D r a) r a)
-  => D r a
-  -> Computation r a (D r a)
+     forall a s r. (Show a, AdditiveUnital (D s r a) r a)
+  => D s r a
+  -> Computation s a (D s r a)
 adjoint d =
   case d of
     DR _ _ _ uniq -> do
-      ma <- gets (\st -> M.lookup uniq (st ^. adjoints))
+      ma <- lift $ gets (\st -> M.lookup uniq (st ^. adjoints))
       case ma of
         Just a  -> return a
         Nothing -> error "Adjoint not in map!"
     DF{} -> error "Cannot get adjoint value of DF. Use makeReverse on this node when composing the computation."
-    D _ -> pure (zero :: D r a)
+    D _ -> pure (zero :: D s r a)
 
 
 runComputation :: () => State s a -> s -> (a, s)
 runComputation = runState
 
-compute :: (P.RealFrac a) => Computation r a (b) -> b
+compute :: (P.RealFrac a) => Computation s a (b) -> b
 compute f = evalState f initComp
 
 {-# INLINE computeAdjoints' #-}
 computeAdjoints' ::
-     forall a r.
+     forall a s r.
      ( Show a
-     , AdditiveUnital (D r a) r a
-     , MultiplicativeUnital (D r a) r a
-     , Additive (D r a) (D r a) r a
-     , AdditiveModule r (D r a) (D r a) a
-     , AdditiveBasis r (D r a) (D r a) a
+     , AdditiveUnital (D s r a) r a
+     -- , MultiplicativeUnital (D s r a) r a
+     , Additive (D s r a) (D s r a) r a
+     , AdditiveModule r (D s r a) (D s r a) a
+     , AdditiveBasis r (D s r a) (D s r a) a
      )
-  => D r a
-  -> Computation r a ()
+  => D s r a
+  -> Computation s a ()
 computeAdjoints' d = do
   modify (\st -> st & adjoints .~ M.empty)
-  o <- pure (one :: D r a)
+  o <- pure (one :: D s r a)
   reverseProp o d
 
 {-# INLINE computeAdjoints #-}
 computeAdjoints ::
      ( Show a
-     , AdditiveUnital (D r a) r a
-     , MultiplicativeUnital (D r a) r a
-     , Additive (D r a) (D r a) r a
-     , AdditiveModule r (D r a) (D r a) a
-     , AdditiveBasis r (D r a) (D r a) a
+     , AdditiveUnital (D s r a) r a
+     -- , MultiplicativeUnital (D s r a) r a
+     , Additive (D s r a) (D s r a) r a
+     , AdditiveModule r (D s r a) (D s r a) a
+     , AdditiveBasis r (D s r a) (D s r a) a
      )
-  => D r a
-  -> Computation r a (Adjoints r a)
+  => D s r a
+  -> Computation s a (Adjoints)
 computeAdjoints d = do
   computeAdjoints' d
   st <- get
   return $ st ^. adjoints
 {-# INLINE diff' #-}
 
-diff' :: forall a r.
+diff' :: forall a s r.
      ( Show a
-     , AdditiveUnital (D r a) r a
-     , MultiplicativeUnital (D r a) r a
-     , Additive (D r a) (D r a) r a
-     , AdditiveModule r (D r a) (D r a) a
-     , AdditiveBasis r (D r a) (D r a) a)
-  => (D r a -> Computation r a (D r a))
-  -> D r a
-  -> Computation r a (D r a, Tangent r a)
+     , AdditiveUnital (D s r a) r a
+     -- , MultiplicativeUnital (D s r a) r a
+     , Additive (D s r a) (D s r a) r a
+     , AdditiveModule r (D s r a) (D s r a) a
+     , AdditiveBasis r (D s r a) (D s r a) a)
+  => (D s r a -> Computation s a (D s r a))
+  -> D s r a
+  -> Computation s a (D s r a, Tangent s r a)
 diff' f x = do
   n <- getNextTag
-  o <- pure (one :: D r a)
+  o <- pure (one :: D s r a)
   fout <- f $ mkForward n o x
   primalTanget fout
 {-# INLINE diff #-}
 
 diff ::
      ( Show a
-     , AdditiveUnital (D r a) r a
-     , MultiplicativeUnital (D r a) r a
-     , Additive (D r a) (D r a) r a
-     , AdditiveModule r (D r a) (D r a) a
-     , AdditiveBasis r (D r a) (D r a) a)
-  => (D r a -> Computation r a (D r a))
-  -> D r a
-  -> Computation r a (Tangent r a)
+     , AdditiveUnital (D s r a) r a
+     -- , MultiplicativeUnital (D s r a) r a
+     , Additive (D s r a) (D s r a) r a
+     , AdditiveModule r (D s r a) (D s r a) a
+     , AdditiveBasis r (D s r a) (D s r a) a)
+  => (D s r a -> Computation s a (D s r a))
+  -> D s r a
+  -> Computation s a (Tangent s r a)
 diff f x =
   snd <$> diff' f x
 
 {-# INLINE diffn #-}
 diffn ::
      ( Show a
-     , AdditiveUnital (D r a) r a
-     , MultiplicativeUnital (D r a) r a
-     , Additive (D r a) (D r a) r a
-     , AdditiveModule r (D r a) (D r a) a
-     , AdditiveBasis r (D r a) (D r a) a
+     , AdditiveUnital (D s r a) r a
+     -- , MultiplicativeUnital (D s r a) r a
+     , Additive (D s r a) (D s r a) r a
+     , AdditiveModule r (D s r a) (D s r a) a
+     , AdditiveBasis r (D s r a) (D s r a) a
      )
   => Int
-  -> (D r a -> Computation r a (D r a))
-  -> D r a
-  -> Computation r a (Tangent r a)
+  -> (D s r a -> Computation s a (D s r a))
+  -> D s r a
+  -> Computation s a (Tangent s r a)
 diffn n f x =
   if n < 0
     then error "Cannot get the nth derivitive when n is negative!"
@@ -445,16 +464,16 @@ diffn n f x =
   where
     go ::
          ( Show a
-         , AdditiveUnital (D r a) r a
-         , MultiplicativeUnital (D r a) r a
-         , Additive (D r a) (D r a) r a
-         , AdditiveModule r (D r a) (D r a) a
-         , AdditiveBasis r (D r a) (D r a) a
+         , AdditiveUnital (D s r a) r a
+         -- , MultiplicativeUnital (D s r a) r a
+         , Additive (D s r a) (D s r a) r a
+         , AdditiveModule r (D s r a) (D s r a) a
+         , AdditiveBasis r (D s r a) (D s r a) a
          )
       => Int
-      -> (D r a -> Computation r a (D r a))
-      -> D r a
-      -> Computation r a (Tangent r a)
+      -> (D s r a -> Computation s a (D s r a))
+      -> D s r a
+      -> Computation s a (Tangent s r a)
     go n f =
       case n of
         0 -> diff f
@@ -463,16 +482,16 @@ diffn n f x =
 {-# INLINE diffn' #-}
 diffn' ::
      ( Show a
-     , AdditiveUnital (D r a) r a
-     , MultiplicativeUnital (D r a) r a
-     , Additive (D r a) (D r a) r a
-     , AdditiveModule r (D r a) (D r a) a
-     , AdditiveBasis r (D r a) (D r a) a
+     , AdditiveUnital (D s r a) r a
+     -- , MultiplicativeUnital (D s r a) r a
+     , Additive (D s r a) (D s r a) r a
+     , AdditiveModule r (D s r a) (D s r a) a
+     , AdditiveBasis r (D s r a) (D s r a) a
      )
   => Int
-  -> (D r a -> Computation r a (D r a))
-  -> D r a
-  -> Computation r a (D r a, (Tangent r a))
+  -> (D s r a -> Computation s a (D s r a))
+  -> D s r a
+  -> Computation s a (D s r a, (Tangent s r a))
 diffn' n f x = do
   it <- f x
   again <- diffn n f x
@@ -480,17 +499,17 @@ diffn' n f x = do
 
 {-# INLINE grad' #-}
 grad' ::
-     ( Trace Noop r a
+     ( Trace Noop s r a
      , Show a
-     , AdditiveUnital (D r a) r a
-     , MultiplicativeUnital (D r a) r a
-     , Additive (D r a) (D r a) r a
-     , AdditiveModule r (D r a) (D r a) a
-     , AdditiveBasis r (D r a) (D r a) a
+     , AdditiveUnital (D s r a) r a
+     -- , MultiplicativeUnital (D s r a) r a
+     , Additive (D s r a) (D s r a) r a
+     , AdditiveModule r (D s r a) (D s r a) a
+     , AdditiveBasis r (D s r a) (D s r a) a
      )
-  => (D r a -> Computation r a (D r a))
-  -> D r a
-  -> Computation r a (D r a, (D r a))
+  => (D s r a -> Computation s a (D s r a))
+  -> D s r a
+  -> Computation s a (D s r a, (D s r a))
 grad' f x = do
   ntg <- getNextTag
   xa <- mkReverse ntg x
@@ -501,17 +520,17 @@ grad' f x = do
 
 {-# INLINE grad #-}
 grad ::
-     ( Trace Noop r a
+     ( Trace Noop s r a
      , Show a
-     , AdditiveUnital (D r a) r a
-     , MultiplicativeUnital (D r a) r a
-     , Additive (D r a) (D r a) r a
-     , AdditiveModule r (D r a) (D r a) a
-     , AdditiveBasis r (D r a) (D r a) a
+     , AdditiveUnital (D s r a) r a
+     -- , MultiplicativeUnital (D s r a) r a
+     , Additive (D s r a) (D s r a) r a
+     , AdditiveModule r (D s r a) (D s r a) a
+     , AdditiveBasis r (D s r a) (D s r a) a
      )
-  => (D r a -> Computation r a (D r a))
-  -> D r a
-  -> Computation r a (D r a)
+  => (D s r a -> Computation s a (D s r a))
+  -> D s r a
+  -> Computation s a (D s r a)
 grad f x = do
   (_, g)<- grad' f x
   return g
@@ -520,16 +539,16 @@ grad f x = do
 jacobian' ::
      ( Show a
      , Show a
-     , AdditiveUnital (D r a) r a
-     , MultiplicativeUnital (D r a) r a
-     , Additive (D r a) (D r a) r a
-     , AdditiveModule r (D r a) (D r a) a
-     , AdditiveBasis r (D r a) (D r a) a
+     , AdditiveUnital (D s r a) r a
+     -- , MultiplicativeUnital (D s r a) r a
+     , Additive (D s r a) (D s r a) r a
+     , AdditiveModule r (D s r a) (D s r a) a
+     , AdditiveBasis r (D s r a) (D s r a) a
      )
-  => (D r a -> Computation r a (D r a))
-  -> Tangent r a
-  -> Primal r a
-  -> Computation r a (D r a, Tangent r a)
+  => (D s r a -> Computation s a (D s r a))
+  -> Tangent s r a
+  -> Primal s r a
+  -> Computation s a (D s r a, Tangent s r a)
 jacobian' f x v = do
   ntg <- getNextTag
   fout <- f $ mkForward ntg v x
@@ -537,14 +556,14 @@ jacobian' f x v = do
 
 jacobian ::
      ( Show a
-     , AdditiveUnital (D r a) r a
-     , MultiplicativeUnital (D r a) r a
-     , Additive (D r a) (D r a) r a
-     , AdditiveModule r (D r a) (D r a) a
-     , AdditiveBasis r (D r a) (D r a) a
+     , AdditiveUnital (D s r a) r a
+     -- , MultiplicativeUnital (D s r a) r a
+     , Additive (D s r a) (D s r a) r a
+     , AdditiveModule r (D s r a) (D s r a) a
+     , AdditiveBasis r (D s r a) (D s r a) a
      )
-  => (D r a -> Computation r a (D r a))
-  -> Tangent r a
-  -> Primal r a
-  -> Computation r a (Tangent r a)
+  => (D s r a -> Computation s a (D s r a))
+  -> Tangent s r a
+  -> Primal s r a
+  -> Computation s a (Tangent s r a)
 jacobian f x v = snd <$> jacobian' f x v

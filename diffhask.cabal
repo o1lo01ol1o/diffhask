@@ -49,6 +49,10 @@ library
                      , dependent-map
                      , numhask
                      , numhask-array
+                     , HMap
+                     , data-variant
+                       , heterolist
+
                      
                      
                    

@@ -9,17 +9,17 @@ module Internal.NumHask.Prelude
     -- * Algebraic Heirarchy
     -- $instances
   , module Internal.NumHask.Algebra.Additive
-  -- , module Internal.NumHask.Algebra.Basis
-  , module Internal.NumHask.Algebra.Distribution
-  , module Internal.NumHask.Algebra.Field
-  -- , module NumHask.Algebra.Integral
-  , module Internal.NumHask.Algebra.Magma
-  , module Internal.NumHask.Algebra.Metric
-  , module Internal.NumHask.Algebra.Module
-  , module Internal.NumHask.Algebra.Multiplicative
-  , module Internal.NumHask.Algebra.Ring
-  , module Internal.NumHask.Algebra.Singleton
-  -- , module Internal.NumHask.Algebra.Diff
+ 
+  -- , module Internal.NumHask.Algebra.Distribution
+  -- , module Internal.NumHask.Algebra.Field
+ 
+  -- , module Internal.NumHask.Algebra.Magma
+  -- , module Internal.NumHask.Algebra.Metric
+  -- , module Internal.NumHask.Algebra.Module
+  -- , module Internal.NumHask.Algebra.Multiplicative
+  -- , module Internal.NumHask.Algebra.Ring
+  -- , module Internal.NumHask.Algebra.Singleton
+
 
   ) where
 
@@ -32,17 +32,17 @@ import Protolude
                zero)
 
 import Internal.NumHask.Algebra.Additive
--- import Internal.NumHask.Algebra.Basis
-import Internal.NumHask.Algebra.Distribution
-import Internal.NumHask.Algebra.Field
--- import NumHask.Algebra.Integral
-import Internal.NumHask.Algebra.Magma
-import Internal.NumHask.Algebra.Metric
-import Internal.NumHask.Algebra.Module
-import Internal.NumHask.Algebra.Multiplicative
-import Internal.NumHask.Algebra.Ring
-import Internal.NumHask.Algebra.Singleton
--- import Internal.NumHask.Algebra.Diff
+
+-- import Internal.NumHask.Algebra.Distribution
+-- import Internal.NumHask.Algebra.Field
+
+-- import Internal.NumHask.Algebra.Magma
+-- import Internal.NumHask.Algebra.Metric
+-- import Internal.NumHask.Algebra.Module
+-- import Internal.NumHask.Algebra.Multiplicative
+-- import Internal.NumHask.Algebra.Ring
+-- import Internal.NumHask.Algebra.Singleton
+
 
 -- $backend
 -- NumHask imports Protolude as the prelude and replaces much of the 'Num' heirarchy in base.
