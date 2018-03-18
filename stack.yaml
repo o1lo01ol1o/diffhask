@@ -15,12 +15,10 @@ extra-deps:
 - dimensions-0.3.2.0
 - tasty-0.12
 - value-supply-0.6
-- data-variant-0.28.0.5
-- heterolist-0.2.0.0
 - constraint-manip-0.1.1.0
 - indextype-0.2.3.0
 - polydata-0.1.0.0
 
 
-resolver: lts-10.4
+resolver: lts-11.1
 allow-newer: true

@@ -44,14 +44,10 @@ library
                      , microlens-th
                      , vector
                      , protolude
-                     , dependent-sum-template
-                     , dependent-sum
-                     , dependent-map
+                     , dimensions
                      , numhask
                      , numhask-array
-                     , HMap
-                     , data-variant
-                       , heterolist
+                     
 
                      
                      
@@ -92,7 +88,7 @@ benchmark diffhask-benchmark
   hs-source-dirs:      benchmark
   main-is:             Main.hs
   build-depends:       base
-                     , criterion
+                     , guage
                      , diffhask
                        , numhask
                      , numhask-array
