@@ -88,7 +88,7 @@ benchmark diffhask-benchmark
   hs-source-dirs:      benchmark
   main-is:             Main.hs
   build-depends:       base
-                     , guage
+                     , criterion
                      , diffhask
                        , numhask
                      , numhask-array

@@ -37,6 +37,7 @@ import           GHC.Show
 import           Lens.Micro                 ((%~), (&), (.~), (^.))
 import           Lens.Micro.TH              (makeLenses)
 import qualified NumHask.Array              as A
+import NumHask.Array ()
 import           NumHask.Prelude            hiding (Show, State, StateT,
                                              TypeRep, abs, negate, show, signum,
                                              (*), (+), (-), (/))
@@ -53,67 +54,73 @@ import           Protolude.Error
 
 
 
-data ComputationState a = ComputationState
+data ComputationState c a = ComputationState
   {
    _nextTag    :: !Tag
   , _nextUID   :: !UID
-  , _adjoints  :: Adjoints
-  , _fanouts   :: Fanouts 
+  , _adjoints  :: Adjoints c a
+  , _fanouts   :: Fanouts c a
   , _fpEps     :: a
   , _maxFpIter :: Int
   }
 
-type Computation a  =  StateT (ComputationState a) Identity
+type Computation c a  = StateT (ComputationState c a) Identity
 
+data D c r a where
+  D :: (Show (A.Array c r a), Dim.Dimensions r, A.Container c) => A.Array c r a -> D c r a
+  --Dm :: (Show (A.Array c s a)) => A.Array c s a -> D c s a
+  DF :: Primal c r a -> Tangent c r a -> Tag -> D c r a
+  DR
+    :: (Show op, Trace c op r a)
+    => D c r a
+    -> DualTrace c op r a
+    -> Tag
+    -> UID
+    -> D c r a
 
-data D (r :: Dim.Dim) a where
-  D :: a -> D r a -- scalar
-  Dm :: r a -> D r a -- array
-  DF :: Primal r a -> Tangent r a -> Tag  -> D r a
-  DR :: (Show op, Trace op r a) => D r a -> DualTrace op r a -> Tag -> UID -> D r a
-
-instance (Show a, Show (r a), Show UID) => Show (D r a) where
+instance (Show a, Show UID) => Show (D c r a) where
   show (D a)            = "D " ++ GHC.Show.show a
-  show (Dm a)           = "D " ++  GHC.Show.show (a)
+  -- show (Dm a)           = "D " ++  GHC.Show.show (a)
   show (DF p t ti)      = "DF " ++  GHC.Show.show p ++ GHC.Show.show t ++ (" Tag  ")
   show (DR p dt ti uid) = "DR " ++  GHC.Show.show p ++  GHC.Show.show dt ++  (" Tag  ")  ++  GHC.Show.show uid
 
-type Primal r a = D r a
-type Tangent r a = D r a
+type Primal c r a = D c r a
+type Tangent c r a = D c r a
 
-type FptNode r a = (D r a, D r a, D r a, D r a) -- nodes needed for a fixpoint evaluation
+type FptNode c r a = (D c r a, D c r a, D c r a, D c r a) -- nodes needed for a fixpoint evaluation
 
 -- FIXME: singleton types on the DualTrace / Arity combination would restrict at least resetAlg to a single possible implementation.
-class Trace op r a where
-  resetAlg :: DualTrace op r a -> Computation a [D r a]
+class Trace c op r a where
+  resetAlg :: DualTrace c op r a -> Computation c a [D c r a]
   resetAlg (U _ a)     = pure [a]
   resetAlg (B _ a b)   = pure [a, b, a, b]
   resetAlg (IxU _ a _) = pure [a]
-  pushAlg :: DualTrace op r a -> D r a -> Computation a [(D r a, D r a)]
+  pushAlg :: DualTrace c op r a -> D c r a -> Computation c a [(D c r a, D c r a)]
   {-# MINIMAL (resetAlg, pushAlg) #-}
 
 data Noop = Noop deriving Show
 
 -- To store the adoint we have to keep track of the outputs of an operation as well as the expressions that yeild the dual of the input arguments
-data DualTrace op r a where
-  N :: op -> DualTrace op r a
-  U ::  op -> D r a -> DualTrace op r a
-  B :: op -> D r a -> D r a -> DualTrace op r a
-  IxU :: op -> D r a -> [Int]  -> DualTrace op r a
-  FxP :: op -> FptNode r a -> DualTrace op r a
+data DualTrace c op r a where
+  N :: op -> DualTrace c op r a
+  U ::  op -> D c r a -> DualTrace c op r a
+  B :: op -> D c r a -> D c r a -> DualTrace c op r a
+  IxU :: op -> D c r a -> [Int]  -> DualTrace c op r a
+  FxP :: op -> FptNode c r a -> DualTrace c op r a
 
-instance (Show op, Show (r a), Show a) => Show (DualTrace op r a) where
+instance (Show op,  Show a) => Show (DualTrace c op r a) where
   show (N o) = "N " ++ show o
   show (U o t ) = "U " ++ show o ++ show t -- ++ show c
   show (B o t tt) = "B " ++ show o ++ show t ++ show tt
   show (IxU o t ix ) = "IxU " ++ show o ++ show t ++ show ix
   show (FxP o (a, b, c, d)) = "Fxp "  ++ show o ++ show a ++ show b ++ show c ++ show d
 
+data SomeD c a where
+  SomeD :: (A.Container c, Dim.Dimensions r) => D c r a -> SomeD c a
 
+type Fanouts c a = M.Map UID (SomeD c a)
 
-type Fanouts = M.Map UID Dim.SomeDim
-
-type Adjoints = M.Map UID Dim.SomeDim
+type Adjoints c a = M.Map UID (SomeD c a)
 
 newtype Tag  = Tag Int deriving (Eq, Ord, Show)
 
@@ -123,7 +130,7 @@ newtype UID = UID Int
 makeLenses ''ComputationState
 
 
-getNextTagKey :: Computation a (Tag)
+getNextTagKey :: Computation c a (Tag)
 getNextTagKey = do
   st <- get
   let tg@(Tag i) = st ^. nextTag
@@ -132,7 +139,7 @@ getNextTagKey = do
     )
   return tg
 
-getNextUID :: Computation a (UID)
+getNextUID :: Computation c a (UID)
 getNextUID = do
   st <- get
   let tg@(UID t) = st ^. nextUID
@@ -142,73 +149,73 @@ getNextUID = do
 
 
 -- Make a reverse node
-r :: (Trace op r a, Show op)
-  => D r a
-  -> DualTrace op r a
+r :: (Trace c op r a, Show op)
+  => D c r a
+  -> DualTrace c op r a
   -> Tag
-  -> Computation a (D r a)
+  -> Computation c a (D c r a)
 r d op ai = do
   uid <- getNextUID
   return $ DR d op ai uid
 
 -- Get Primal
-p :: D r a -> D r a
+p :: D c r a -> D c r a
 p =
   \case
     D v -> D v
-    Dm v -> Dm v
+    -- Dm v -> Dm v
     DF d _ _ -> d
     DR d _ _ _ -> d
 
 -- Get deepest primal
-pD :: D r a -> D r a
+pD :: D c r a -> D c r a
 pD =
   \case
     D v -> D v
-    Dm v -> Dm v
+    --  Dm v -> Dm v
     DF d _ _ -> pD d
     DR d _ _ _ -> pD d
 
-instance (Eq a) => Eq (D r a) where
+instance (Eq a) => Eq (D c r a) where
   d1 == d2 = pD d1 == pD d2
 
 
-instance (Ord a) => Ord (D r a) where
+instance (Ord a) => Ord (D c r a) where
   d1 `compare` d2 = pD d1 `compare` pD d2
 
--- toNumeric :: D r a -> b
+toNumeric :: D c r a -> A.Array c r a
 
--- toNumeric d =
---   case pD d of
---     D v -> v
---     Dm v -> v
+toNumeric d =
+  case pD d of
+    D v -> v
+    -- Dm v -> v
 
 class FfMon op a where
-  ff :: op -> a -> a
+  ff :: op -> a ->  a
 
-class RffMon op r a where
-  rff :: op -> r a -> r a
+-- class RffMon op a r where
+--   rff :: op -> r a -> r a
 
-class MonOp op r a where
+class MonOp c op r a where
 
-  fd :: (Computation a ~ m) => op -> D r a -> m (D r a)
+  fd :: (Computation c a ~ m) => op -> D c r a -> m (D c r a)
   df ::
-       (Computation a ~ m)
+       (Computation c a ~ m)
     => op
-    -> D r a
-    -> D r a
-    -> D r a
-    -> m (D r a)
+    -> D c r a
+    -> D c r a
+    -> D c r a
+    -> m (D c r a)
 -- {-#INLINE monOp #-}
-monOp ::
-     (MonOp op r a, FfMon op a, (Trace op r a), Show op, RffMon op r a)
+monOp :: 
+     (MonOp c op r a, FfMon op a, (Trace c op r a), Show op,  FfMon op (A.Array c r a))
   => op
-  -> D r a
-  -> Computation a (D r a)
+  -> D c r a
+  -> Computation c a (D c r a)
 monOp op a =
   case a of
     D ap -> return . D $ ff op ap
-    Dm ap -> return . Dm $ rff op ap
+    -- Dm ap -> return . Dm $ rff op ap
     DF ap at ai -> do
       cp <- fd op ap
       cdf <- df op cp ap at
@@ -217,81 +224,78 @@ monOp op a =
       cp <- fd op ap
       r cp (U op a) ai
 
-class DfDaBin op r b c | b -> c where
+class DfDaBin op r b a | b -> a where
   df_da ::
-       (Computation a ~ m)
+       (Computation c a ~ m)
     => op
     -> b
-    -> D r c
-    -> D r c
-    -> D r c
-    -> m (D r c)
+    -> D c r a
+    -> D c r a
+    -> D c r a
+    -> m (D c r a)
 
-class DfDbBin op r a c | a -> c where
+class DfDbBin op r a b | a -> b where
   df_db ::
-       (Computation c ~ m)
+       (Computation c b ~ m)
     => op
     -> a
-    -> D r c
-    -> D r c
-    -> D r c
-    -> m (D r c)
+    -> D c r b
+    -> D c r b
+    -> D c r b
+    -> m (D c r b)
 
-class (Show op, E.AdditiveBasis r a, E.AdditiveModule r a) =>
-      FfBin op a r where
-  rff_bin :: op -> r a -> r a -> r a -- Forward mode function for arrays
-  rff_bin op _ _ =
-    GHC.Err.error $
-    "array x array operation is not defined for " ++ (GHC.Show.show op)
-  r_ff_bin :: op -> r a -> a -> r a -- For scalar x arrays
-  r_ff_bin op _ _ =
-    GHC.Err.error $
-    "array x scalar operation is not defined for " ++ (GHC.Show.show op)
-  _ff_bin :: op -> a -> r a -> r a -- For scalar x arrays
-  _ff_bin op _ _ =
-    GHC.Err.error $
-    "scalar x array operation is not defined for " ++ (GHC.Show.show op)
+-- class (Show op, E.AdditiveBasis r a, E.AdditiveModule r a) =>
+--       FfBin op a r where
+--   rff_bin :: op -> r a -> r a -> r a -- Forward mode function for arrays
+--   rff_bin op _ _ =
+--     GHC.Err.error $
+--     "array x array operation is not defined for " ++ (GHC.Show.show op)
+--   r_ff_bin :: op -> r a -> a -> r a -- For scalar x arrays
+--   r_ff_bin op _ _ =
+--     GHC.Err.error $
+--     "array x scalar operation is not defined for " ++ (GHC.Show.show op)
+--   _ff_bin :: op -> a -> r a -> r a -- For scalar x arrays
+--   _ff_bin op _ _ =
+--     GHC.Err.error $
+--     "scalar x array operation is not defined for " ++ (GHC.Show.show op)
 
 
-class DfBin op r a b c | a b -> c where
+class DfBin op r a b d | a b -> d where
   type BinOpShape a
-  fd_bin :: (Computation c ~ m) => op -> a -> b -> m (D r c)
+  fd_bin :: (Computation c d ~ m) => op -> a -> b -> m (D c r d)
   df_dab ::
-       (Computation c ~ m)
+       (Computation c d ~ m)
     => op
     -> a
     -> b
-    -> (D r c)
-    -> (D r c)
-    -> (D r c)
-    -> (D r c)
-    -> (D r c)
-    -> m (D r c)
+    -> (D c r d)
+    -> (D c r d)
+    -> (D c r d)
+    -> (D c r d)
+    -> (D c r d)
+    -> m (D c r d)
 
 class (Show op) =>
       BinOp op a where
   ff_bin :: op -> a -> a -> a
-  binOp ::
-       ( Trace op r a
-       , Computation a ~ m
-       , Show op
-       , Trace op r a
-       , DfBin op r (D r a) (D r a) a
-       , DfDaBin op r (D r a) a
-       , DfDbBin op r (D r a) a
-       , FfBin op a r
+  binOp :: 
+       ( Trace c op r a
+       , DfBin op r (D c r a) (D c r a) a
+       , BinOp op (A.Array c r a)
+       , DfDaBin op r (D c r a) a
+       , DfDbBin op r (D c r a) a
        )
     => op
-    -> (D r a)
-    -> (D r a)
-    -> m (D r a)
+    -> (D c r a)
+    -> (D c r a)
+    -> Computation c a (D c r a)
   -- {-#INLINE binOp #-}
   binOp op a b = do
     case a of
       D ap ->
         case b of
           D bp -> return . D $ ff_bin op ap bp
-          Dm bp -> return . Dm $ _ff_bin op ap bp
+          --Dm bp -> return . Dm $ _ff_bin op ap bp
           DF bp bt bi -> do
             cp <- fd_bin op a bp
             cdf <- df_db op a cp bp bt
@@ -299,27 +303,27 @@ class (Show op) =>
           DR bp _ bi _ -> do
             cfd <- fd_bin op a bp
             r (cfd) (B op a b) bi
-      Dm ap ->
-        case b of
-          D bp -> return . Dm $ r_ff_bin op ap bp
-          Dm bp -> return . Dm $ rff_bin op ap bp
-          DF bp bt bi -> do
-            cp <- fd_bin op a bp
-            cdf <- df_db op a cp bp bt
-            return $ DF cp cdf bi
-          DR bp _ bi _ -> do
-            cfd <- fd_bin op a bp
-            r (cfd) (B op a b) bi
+      -- Dm ap ->
+      --   case b of
+      --     D bp -> return . Dm $ r_ff_bin op ap bp
+      --     Dm bp -> return . Dm $ rff_bin op ap bp
+      --     DF bp bt bi -> do
+      --       cp <- fd_bin op a bp
+      --       cdf <- df_db op a cp bp bt
+      --       return $ DF cp cdf bi
+      --     DR bp _ bi _ -> do
+      --       cfd <- fd_bin op a bp
+      --       r (cfd) (B op a b) bi
       DF ap at ai ->
         case b of
           D _ -> do
             cp <- fd_bin op ap b
             cdf <- df_da op b cp ap at
             return $ DF cp (cdf) ai
-          Dm _ -> do
-            cp <- fd_bin op ap b
-            cdf <- df_da op b cp ap at
-            return $ DF cp (cdf) ai
+          -- Dm _ -> do
+          --   cp <- fd_bin op ap b
+          --   cdf <- df_da op b cp ap at
+          --   return $ DF cp (cdf) ai
           DF bp bt bi ->
             case compare ai bi of
               EQ -> do
@@ -345,15 +349,15 @@ class (Show op) =>
                 return $ DF cp (cdf) ai
               EQ ->
                 GHC.Err.error
-                  "Forward and reverse AD r cannot run on the same level."
+                  "Forward and reverse AD c r aannot run on the same level."
       DR ap _ ai _ ->
         case b of
           D _ -> do
             fda <- fd_bin op ap b
             r (fda) (B op a b) ai
-          Dm _ -> do
-            fda <- fd_bin op ap b
-            r (fda) (B op a b) ai
+          -- Dm _ -> do
+          --   fda <- fd_bin op ap b
+          --   r (fda) (B op a b) ai
           DF bp bt bi ->
             case compare ai bi of
               EQ ->
