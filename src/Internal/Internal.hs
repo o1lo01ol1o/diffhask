@@ -66,8 +66,10 @@ data ComputationState c a = ComputationState
 
 type Computation c a  = StateT (ComputationState c a) Identity
 
+type Operable c r a  = (E.Additive a, Dim.Dimensions r, A.Container c)
+
 data D c r a where
-  D :: (Show (A.Array c r a), Dim.Dimensions r, A.Container c) => A.Array c r a -> D c r a
+  D :: (Show (A.Array c r a), Operable c r a) => A.Array c r a -> D c r a
   --Dm :: (Show (A.Array c s a)) => A.Array c s a -> D c s a
   DF :: Primal c r a -> Tangent c r a -> Tag -> D c r a
   DR
@@ -77,6 +79,14 @@ data D c r a where
     -> Tag
     -> UID
     -> D c r a
+
+type family GetContainer a where
+  GetContainer (D c _ _) = c
+  GetContainer (Computation c a _) = c
+
+type SameContainer a b = (GetContainer a ~ GetContainer b)
+
+
 
 instance (Show a, Show UID) => Show (D c r a) where
   show (D a)            = "D " ++ GHC.Show.show a
@@ -190,13 +200,13 @@ toNumeric d =
     D v -> v
     -- Dm v -> v
 
-class FfMon op a where
+class (E.Additive a) => FfMon op a where
   ff :: op -> a ->  a
 
 -- class RffMon op a r where
 --   rff :: op -> r a -> r a
 
-class MonOp c op r a where
+class (Operable c r a) => MonOp c op r a where
 
   fd :: (Computation c a ~ m) => op -> D c r a -> m (D c r a)
   df ::
@@ -224,7 +234,7 @@ monOp op a =
       cp <- fd op ap
       r cp (U op a) ai
 
-class DfDaBin op r b a | b -> a where
+class (Operable c r a) => DfDaBin c op r b a | b -> a where
   df_da ::
        (Computation c a ~ m)
     => op
@@ -234,7 +244,7 @@ class DfDaBin op r b a | b -> a where
     -> D c r a
     -> m (D c r a)
 
-class DfDbBin op r a b | a -> b where
+class (Operable c r b) => DfDbBin c op r a b | a -> b where
   df_db ::
        (Computation c b ~ m)
     => op
@@ -245,7 +255,7 @@ class DfDbBin op r a b | a -> b where
     -> m (D c r b)
 
 -- class (Show op, E.AdditiveBasis r a, E.AdditiveModule r a) =>
---       FfBin op a r where
+--       FfBin c op a r where
 --   rff_bin :: op -> r a -> r a -> r a -- Forward mode function for arrays
 --   rff_bin op _ _ =
 --     GHC.Err.error $
@@ -260,8 +270,7 @@ class DfDbBin op r a b | a -> b where
 --     "scalar x array operation is not defined for " ++ (GHC.Show.show op)
 
 
-class DfBin op r a b d | a b -> d where
-  type BinOpShape a
+class (Operable c r d) => DfBin c op r a b d | a b -> d where
   fd_bin :: (Computation c d ~ m) => op -> a -> b -> m (D c r d)
   df_dab ::
        (Computation c d ~ m)
@@ -280,10 +289,10 @@ class (Show op) =>
   ff_bin :: op -> a -> a -> a
   binOp :: 
        ( Trace c op r a
-       , DfBin op r (D c r a) (D c r a) a
+       , DfBin c op r (D c r a) (D c r a) a
        , BinOp op (A.Array c r a)
-       , DfDaBin op r (D c r a) a
-       , DfDbBin op r (D c r a) a
+       , DfDaBin c op r (D c r a) a
+       , DfDbBin c op r (D c r a) a
        )
     => op
     -> (D c r a)

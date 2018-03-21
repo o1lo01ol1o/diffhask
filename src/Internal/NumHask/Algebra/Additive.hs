@@ -10,6 +10,7 @@
 {-# LANGUAGE TypeFamilies           #-}
 {-# LANGUAGE TypeFamilyDependencies #-}
 {-# LANGUAGE TypeInType             #-}
+{-# LANGUAGE OverloadedLists             #-}
 {-# LANGUAGE UndecidableInstances   #-}
 
 -- | A magma heirarchy for addition. The basic magma structure is repeated and prefixed with 'Additive-'.
@@ -39,9 +40,12 @@ import           NumHask.Prelude   (Bool (..), Double, Float, Int, Integer,
 import qualified NumHask.Prelude   as P
 import qualified NumHask.Prelude   as E
 import qualified Numeric.Dimensions as Dim
+import GHC.Exts
 
 type AdditiveBasisConstraints c r t
    = ( E.Num t
+     , Dim.Dimensions r
+     , A.Container c
      , E.AdditiveBasis (A.Array c r) t
      , E.AdditiveInvertible ((A.Array c r) t)
      , E.AdditiveGroupBasis (A.Array c r) t
@@ -52,13 +56,23 @@ type AdditiveBasisConstraints c r t
 -- > ∀ a,b ∈ A: a `plus` b ∈ A
 --
 -- law is true by construction in Haskell
-class (Dim.Dimensions r) =>
+class ( SameContainer a b
+      , Dim.Dimensions r
+      , A.Container (GetContainer a)
+      , A.Container (GetContainer b)
+      , Operable (GetContainer a) r t
+      , Operable (GetContainer b) r t
+      ) =>
       AdditiveMagma a b r t | a b -> t, a -> t, b -> t
   --, a -> r, b -> r
                                                 , a b -> r
           -- Fundep: r and t can be determined by a, b, or a and b:  scalar ops don't change shape and must have the same representation.
                                                                                                                                           where
-  plus :: a -> b -> Computation c t (D c r t)
+  plus ::
+       (GetContainer a ~ c, SameContainer a b)
+    => a
+    -> b
+    -> Computation c t (D c r t)
 
 
 -- | Unital magma for addition.
@@ -90,7 +104,7 @@ class AdditiveMagma a a r t =>
 -- law is true by construction in Haskell
 class (AdditiveMagma a a r t ) =>
       AdditiveInvertible a r t | a -> t, a -> r where
-  negate :: a -> Computation c t (D c r t)
+  negate :: (GetContainer a ~ c) => a -> Computation c t (D c r t)
 
 
 -- | Idempotent magma for addition.
@@ -128,7 +142,7 @@ class ( AdditiveCommutative a r t
       ) =>
       Additive a b r t where
   infixl 6 +
-  (+) ::  a -> b -> Computation c t (D c r t)
+  (+) :: (GetContainer a ~ c, SameContainer a b) => a -> b -> Computation c t (D c r t)
   a + b = plus a b
 
 
@@ -137,16 +151,17 @@ class ( AdditiveCommutative a r t
 --
 -- > negate a `plus` a = zero
 class ( AdditiveMagma a b r t
-      , AdditiveMagma (Computation c t (D c r t)) a r t
+      , AdditiveMagma (Computation (GetContainer a) t (D (GetContainer a) r t)) a r t
       , AdditiveUnital b r t
       , AdditiveAssociative a r t
       , AdditiveAssociative b r t
       , AdditiveInvertible b r t
+      , SameContainer a b
       )
      =>
       AdditiveLeftCancellative a b r t where
   infixl 6 ~-
-  (~-) :: a -> b -> Computation c t (D c r t)
+  (~-) :: (GetContainer b ~ c, SameContainer a b) => a -> b -> Computation c t (D c r t)
   (~-) a b = negate b `plus` a
 
 -- | Non-commutative right minus
@@ -155,12 +170,12 @@ class ( AdditiveMagma a b r t
 class ( AdditiveUnital b r t
       , AdditiveAssociative a r t
       , AdditiveInvertible b r t
-      --, AdditiveMagma a (Computation c t (D c r t)) r t
+      , AdditiveMagma a (Computation (GetContainer b) t (D (GetContainer b) r t)) r t
 
       ) =>
       AdditiveRightCancellative a b r t where
   infixl 6 -~
-  (-~) :: a -> b -> Computation c t (D c r t)
+  (-~) :: (GetContainer a ~ c, SameContainer a b) => a -> b -> Computation c t (D c r t)
   (-~) a b = a `plus` negate b
 
 -- | Minus ('-') is reserved for where both the left and right cancellative laws hold.  This then implies that the AdditiveGroup is also Abelian.
@@ -173,12 +188,12 @@ class ( AdditiveUnital b r t
 -- > a + negate a = zero
 class ( Additive a b r t
       , AdditiveInvertible b r t
-      --, AdditiveMagma a (Computation c t (D c r t)) r t
+      , AdditiveMagma a (Computation (GetContainer a) t (D (GetContainer b) r t)) r t
 
       ) =>
       AdditiveGroup a b r t where
   infixl 6 -
-  (-) :: a -> b -> Computation c t (D c r t)
+  (-) :: (SameContainer a b, GetContainer a ~ c) => a -> b -> Computation c t (D c r t)
   (-) a b = a `plus` negate b
 
 data Add = Add deriving Show
@@ -237,16 +252,16 @@ instance (E.Additive a) => BinOp Add a where
 --   {-# INLINE _ff_bin #-}
 --   _ff_bin _ a b = a E.+. b
 
-instance DfDaBin Add r (D s r a) a where
+instance (Operable s r a) => DfDaBin s Add r (D s r a) a where
   {-# INLINE df_da #-}
   df_da _ _ _ _ at = pure at
 
 
-instance DfDbBin Add r (D s r a) a where
+instance (Operable s r a) =>DfDbBin s Add r (D s r a) a where
   {-# INLINE df_db #-}
   df_db _ _ _ _ bt = pure bt
 
-instance DfBin Add r (D s r a) (D s r a) a where
+instance (Operable s r a) =>DfBin s Add r (D s r a) (D s r a) a where
   {-# INLINE fd_bin #-}
   fd_bin _ a b = binOp Add a b
   {-# INLINE df_dab #-}
@@ -257,18 +272,18 @@ instance  Trace s Add  r a where
   resetAlg (B _ a b) = pure [a, b, a, b]
 
 
-instance (AdditiveBasisConstraints s r Double) =>
-         AdditiveUnital (D s r Double) r Double where
-  zero = D 0
+instance (AdditiveBasisConstraints [] r Double, Operable [] r Double) =>
+         AdditiveUnital (D [] r Double) r Double where
+  zero = D (E.map (E.const (0.0 :: Double)) [(0.0 ::Double)..] :: A.Array [] r Double)
 
-instance (AdditiveBasisConstraints s r Float) => AdditiveUnital  (D s r Float) r Float where
-  zero = D 0
+instance (AdditiveBasisConstraints [] r Float) => AdditiveUnital  (D [] r Float) r Float where
+  zero = D (E.map (E.const (0.0 :: Float)) [(0.0 ::Float)..] :: A.Array [] r Float)
 
-instance (AdditiveBasisConstraints s r Double) => AdditiveUnital  (Computation s Double (D s r Double)) r Double where
-  zero = P.pure P.$ D 0
+instance (AdditiveBasisConstraints [] r Double) => AdditiveUnital  (Computation [] Double (D [] r Double)) r Double where
+  zero = P.pure P.$ D (E.map (E.const (0.0 :: Double)) [(0.0 ::Double)..] :: A.Array [] r Double)
 
-instance (AdditiveBasisConstraints s r Float) => AdditiveUnital (Computation s Float (D s r Float)) r Float where
-  zero = P.pure P.$ D 0
+instance (AdditiveBasisConstraints [] r Float) => AdditiveUnital (Computation [] Float (D [] r Float)) r Float where
+  zero = P.pure P.$ D (E.map (E.const (0.0 :: Float)) [(0.0 ::Float)..] :: A.Array [] r Float)
 
 
 instance (AdditiveBasisConstraints s r Double) => AdditiveAssociative (D s r Double) r Double
@@ -303,7 +318,7 @@ instance (AdditiveBasisConstraints s r Double) => AdditiveInvertible  (D s r Dou
 instance (AdditiveBasisConstraints s r Float) => AdditiveInvertible   (D s r Float) r Float where
   negate = monOp Negate
 
-instance (E.AdditiveInvertible a) => FfMon Negate a where
+instance (E.AdditiveInvertible a, E.Additive a) => FfMon Negate a where
   {-# INLINE ff #-}
   ff _ a = P.negate a
 
@@ -325,38 +340,96 @@ instance (AdditiveInvertible (D s r a) r a) => Trace s Negate r a where
   resetAlg (U _ a) = pure [a]
 
 
-instance (AdditiveBasisConstraints s r Double) => Additive (D s r Double) (D s r Double) r Double
+instance ( AdditiveBasisConstraints s r Double
+         , AdditiveUnital (D s r Double) r Double
+         ) =>
+         Additive (D s r Double) (D s r Double) r Double
 
-instance (AdditiveBasisConstraints s r Double) => Additive (Computation s Double (D s r Double)) (D s r Double) r Double
+instance ( AdditiveBasisConstraints s r Double
+         , AdditiveUnital (Computation s Double (D s r Double)) r Double
+         , AdditiveUnital (D s r Double) r Double
+         ) =>
+         Additive (Computation s Double (D s r Double)) (D s r Double) r Double
 
-instance (AdditiveBasisConstraints s r Double) => Additive (D s r Double) (Computation s Double (D s r Double)) r Double
+instance ( AdditiveBasisConstraints s r Double
+         , AdditiveUnital (Computation s Double (D s r Double)) r Double
+         , AdditiveUnital (D s r Double) r Double
+         ) =>
+         Additive (D s r Double) (Computation s Double (D s r Double)) r Double
 
-instance (AdditiveBasisConstraints s r Float) => Additive (D s r Float) (D s r Float) r Float
+instance ( AdditiveBasisConstraints s r Float
+         , AdditiveUnital (D s r Float) r Float
+         ) =>
+         Additive (D s r Float) (D s r Float) r Float
 
-instance (AdditiveBasisConstraints s r Float) => Additive (D s r Float) (Computation s Float (D s r Float)) r Float
+instance ( AdditiveBasisConstraints s r Float
+         , AdditiveUnital (D s r Float) r Float
+         , AdditiveUnital (Computation s Float (D s r Float)) r Float
+         ) =>
+         Additive (D s r Float) (Computation s Float (D s r Float)) r Float
 
-instance (AdditiveBasisConstraints s r Float) => Additive (Computation s Float (D s r Float)) (D s r Float) r Float
+instance ( AdditiveBasisConstraints s r Float
+         , AdditiveUnital (D s r Float) r Float
+         , AdditiveUnital (Computation s Float (D s r Float)) r Float
+         ) =>
+         Additive (Computation s Float (D s r Float)) (D s r Float) r Float
 
-instance (AdditiveBasisConstraints s r Double) => Additive (Computation s Double (D s r Double)) (Computation s Double (D s r Double)) r Double
+instance ( AdditiveBasisConstraints s r Double
+         , AdditiveUnital (Computation s Double (D s r Double)) r Double
+         , AdditiveUnital (D s r Double) r Double
+         ) =>
+         Additive (Computation s Double (D s r Double)) (Computation s Double (D s r Double)) r Double
 
 
-instance (AdditiveBasisConstraints s r Float) => Additive (Computation s Float (D s r Float)) (Computation s Float (D s r Float)) r Float
+instance ( AdditiveBasisConstraints s r Float
+         , AdditiveUnital (Computation s Float (D s r Float)) r Float
+         ) =>
+         Additive (Computation s Float (D s r Float)) (Computation s Float (D s r Float)) r Float
 
-instance (AdditiveBasisConstraints s r Double) => AdditiveGroup (D s r Double) (D s r Double) r Double
+instance ( AdditiveBasisConstraints s r Double
+         , AdditiveUnital (D s r Double) r Double
+         ) =>
+         AdditiveGroup (D s r Double) (D s r Double) r Double
 
-instance (AdditiveBasisConstraints s r Double) => AdditiveGroup (Computation s Double (D s r Double)) (D s r Double) r Double
+instance ( AdditiveBasisConstraints s r Double
+         , AdditiveUnital (D s r Double) r Double
+         , AdditiveUnital (Computation s Double (D s r Double)) r Double
+         ) =>
+         AdditiveGroup (Computation s Double (D s r Double)) (D s r Double) r Double
 
-instance (AdditiveBasisConstraints s r Double) => AdditiveGroup (D s r Double) (Computation s Double (D s r Double)) r Double
+instance ( AdditiveBasisConstraints s r Double
+         , AdditiveUnital (D s r Double) r Double
+         , AdditiveUnital (Computation s Double (D s r Double)) r Double
+         ) =>
+         AdditiveGroup (D s r Double) (Computation s Double (D s r Double)) r Double
 
-instance (AdditiveBasisConstraints s r Float) => AdditiveGroup (D s r Float) (D s r Float) r Float
+instance ( AdditiveBasisConstraints s r Float
+         , AdditiveUnital (D s r Float) r Float
+         ) =>
+         AdditiveGroup (D s r Float) (D s r Float) r Float
 
-instance (AdditiveBasisConstraints s r Float) => AdditiveGroup (D s r Float) (Computation s Float (D s r Float)) r Float
+instance ( AdditiveBasisConstraints s r Float
+         , AdditiveUnital (D s r Float) r Float
+         , AdditiveUnital (Computation s Float (D s r Float)) r Float
+         ) =>
+         AdditiveGroup (D s r Float) (Computation s Float (D s r Float)) r Float
 
-instance (AdditiveBasisConstraints s r Float) => AdditiveGroup (Computation s Float (D s r Float)) (D s r Float) r Float
+instance ( AdditiveBasisConstraints s r Float
+         , AdditiveUnital (D s r Float) r Float
+         , AdditiveUnital (Computation s Float (D s r Float)) r Float
+         ) =>
+         AdditiveGroup (Computation s Float (D s r Float)) (D s r Float) r Float
 
-instance (AdditiveBasisConstraints s r Double) => AdditiveGroup (Computation s Double (D s r Double)) (Computation s Double (D s r Double)) r Double
+instance ( AdditiveBasisConstraints s r Double
+         , AdditiveUnital (Computation s Double (D s r Double)) r Double
+         , AdditiveUnital (D s r Double) r Double
+         ) =>
+         AdditiveGroup (Computation s Double (D s r Double)) (Computation s Double (D s r Double)) r Double
 
-instance (AdditiveBasisConstraints s r Float) => AdditiveGroup (Computation s Float (D s r Float)) (Computation s Float (D s r Float)) r Float
+instance ( AdditiveBasisConstraints s r Float
+         , AdditiveUnital (Computation s Float (D s r Float)) r Float
+         ) =>
+         AdditiveGroup (Computation s Float (D s r Float)) (Computation s Float (D s r Float)) r Float
 
 
 -- | Additive Module Laws
