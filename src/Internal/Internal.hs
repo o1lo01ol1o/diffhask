@@ -53,7 +53,12 @@ import           Protolude.Error
 -- import           Data.GADT.Show.TH
 
 
-
+-- Next strat:
+-- Drop all scalar parts of the diffhask hierachy.
+-- pass all array ops directly to the array instances of numhask hierarchy
+-- For scalar literals / scalar-array ops:
+-- define GroupBasis ops for scalar lits and D c r a`s that are then lifted into an Array s [] LitType or packed into a  scalar `D` constructor with unspecialized dimensions and container types.  later will need to hide scalar constructor since we won't have defined scalar ops in the hierarchy.  Means scalar-scalar ops will need to be done on dim '[1] arrays unless we can `index` it back to a scalar ctor . . . but this still won't register as a literal unless we drop the ctor and use a type family to output the result.  Would this break the computation graph or not?  might not since we'd be lifting in and out on either side using the hidden ctor (no unaccounted-for ops could occur in between )
+--
 data ComputationState c a = ComputationState
   {
    _nextTag    :: !Tag
