@@ -1,0 +1,1 @@
+:set -XOverloadedLists -XTypeFamilies -XFlexibleContexts -XDataKinds -XNoImplicitPrelude

@@ -27,154 +27,15 @@ import           Lens.Micro                 ((%~), (&), (.~), (^.))
 import           Prelude                    (error)
 import qualified NumHask.Prelude                  as P
 import Data.Unique
-import qualified Data.HMap as HM
-import qualified Data.HKey as HM
-import qualified Data.Variant as DV
---FIXME: prune redundancy
 
--- type AdditiveDifferentiable t r
---   = (
---      AdditiveMagma (D r t) (D r t) r t
---      , AdditiveMagma (Computation r t (D r t)) (D r t) r t
---      , AdditiveMagma (Computation r t (D r t)) (Computation r t (D r t)) r t
---      , AdditiveMagma (D r t) (Computation r t (D r t)) r t
-
---      , AdditiveAssociative (D r t) r t
---      , AdditiveAssociative (Computation r t (D r t)) r t
-
---      , AdditiveCommutative (D r t) r t
---      , AdditiveCommutative (Computation r t (D r t)) r t
-
---      , AdditiveInvertible (D r t) r t
---      , AdditiveInvertible (Computation r t (D r t)) r t
-
---      , AdditiveIdempotent (D r t) (D r t) r t
---      , AdditiveIdempotent (Computation r t (D r t)) (D r t) r t
---      , AdditiveIdempotent (Computation r t (D r t)) (Computation r t (D r t)) r t
---      , AdditiveIdempotent (D r t) (Computation r t (D r t)) r t
-
---      , Additive (D r t) (D r t) r t
---      , Additive (Computation r t (D r t)) (D r t) r t
---      , Additive (Computation r t (D r t)) (Computation r t (D r t)) r t
---      , Additive (D r t) (Computation r t (D r t)) r t
-
---      , AdditiveLeftCancellative (D r t) (D r t) r t
---      , AdditiveLeftCancellative (Computation r t (D r t)) (D r t) r t
---      , AdditiveLeftCancellative (Computation r t (D r t)) (Computation r t (D r t)) r t
---      , AdditiveLeftCancellative (D r t) (Computation r t (D r t)) r t
-
---      , AdditiveGroup (D r t) (D r t) r t
---      , AdditiveGroup (Computation r t (D r t)) (D r t) r t
---      , AdditiveGroup (Computation r t (D r t)) (Computation r t (D r t)) r t
---      , AdditiveGroup (D r t) (Computation r t (D r t)) r t
---      )
-
--- type MultiplicativeDifferential t r
---   = (MultiplicativeMagma (D r t) (D r t) r t
---      , MultiplicativeMagma (Computation r t (D r t)) (D r t) r t
---      , MultiplicativeMagma (Computation r t (D r t)) (Computation r t (D r t)) r t
---      , MultiplicativeMagma (D r t) (Computation r t (D r t)) r t
-
---      , MultiplicativeUnital (D r t) r t
---      , MultiplicativeUnital (Computation r t (D r t)) r t
-
---      , MultiplicativeAssociative (D r t) r t
---      , MultiplicativeAssociative (Computation r t (D r t)) r t
-
---      , MultiplicativeCommutative (D r t) r t
---      , MultiplicativeCommutative (Computation r t (D r t)) r t
-
---      , MultiplicativeInvertible (D r t) r t
---      , MultiplicativeInvertible (Computation r t (D r t)) r t
-
---      , Multiplicative (D r t) (D r t) r t
---      , Multiplicative (Computation r t (D r t)) (D r t) r t
---      , Multiplicative (Computation r t (D r t)) (Computation r t (D r t)) r t
---      , Multiplicative (D r t) (Computation r t (D r t)) r t
-
---      , MultiplicativeLeftCancellative (D r t) (D r t) r t
---      , MultiplicativeLeftCancellative (Computation r t (D r t)) (D r t) r t
---      , MultiplicativeLeftCancellative (Computation r t (D r t)) (Computation r t (D r t)) r t
---      , MultiplicativeLeftCancellative (D r t) (Computation r t (D r t)) r t
-
---      , MultiplicativeRightCancellative (D r t) (D r t) r t
---      , MultiplicativeRightCancellative (Computation r t (D r t)) (D r t) r t
---      , MultiplicativeRightCancellative (Computation r t (D r t)) (Computation r t (D r t)) r t
---      , MultiplicativeRightCancellative (D r t) (Computation r t (D r t)) r t
-
---      , MultiplicativeGroup (D r t) (D r t) r t
---      , MultiplicativeGroup (Computation r t (D r t)) (D r t) r t
---      , MultiplicativeGroup (Computation r t (D r t)) (Computation r t (D r t)) r t
---      , MultiplicativeGroup (D r t) (Computation r t (D r t)) r t)
-
--- type Differentiable t r
---    = ( MultiplicativeDifferential t r
---      , AdditiveDifferentiable t r
---      , Distribution (D r t) (D r t) r t
---      , Distribution (Computation r t (D r t)) (D r t) r t
---      , Distribution (Computation r t (D r t)) (Computation r t (D r t)) r t
---      , Distribution (D r t) (Computation r t (D r t)) r t
-
---      , Semifield (D r t) (D r t) r t
---      , Semifield (Computation r t (D r t)) (D r t) r t
---      , Semifield (Computation r t (D r t)) (Computation r t (D r t)) r t
---      , Semifield (D r t) (Computation r t (D r t)) r t
-
---      , Field (D r t) (D r t) r t
---      , Field (Computation r t (D r t)) (D r t) r t
---      , Field (Computation r t (D r t)) (Computation r t (D r t)) r t
---      , Field (D r t) (Computation r t (D r t)) r t
-
---      , ExpField (D r t) r t
---      , ExpField (Computation r t (D r t)) r t
-
---      , BoundedField (D r t) r t
---      , BoundedField (Computation r t (D r t)) r t
-
---      , TrigField (D r t) r t
---      , TrigField (Computation r t (D r t)) r t
-
---      , Signed (D r t) r t
---      , Signed (Computation r t (D r t)) r t
-
---      , Normed (D r t) r t
---      , Normed (Computation r t (D r t)) r t
-
-     -- , Metric (D r t) (D r t) r t
-     -- , Metric (Computation r t (D r t)) (D r t) r t
-     -- , Metric (Computation r t (D r t)) (Computation r t (D r t)) r t
-     -- , Metric (D r t) (Computation r t (D r t)) r t
-
-     -- , Epsilon (D r t) (D r t) r t
-     -- , Epsilon (Computation r t (D r t)) (D r t) r t
-     -- , Epsilon (Computation r t (D r t)) (Computation r t (D r t)) r t
-     -- , Epsilon (D r t) (Computation r t (D r t)) r t
-
-     -- , Ring (D r t) (D r t) r t
-     -- , Ring (Computation r t (D r t)) (D r t) r t
-     -- , Ring (Computation r t (D r t)) (Computation r t (D r t)) r t
-     -- , Ring (D r t) (Computation r t (D r t)) r t
-
-     -- , CRing (D r t) (D r t) r t
-     -- , CRing (Computation r t (D r t)) (D r t) r t
-     -- , CRing (Computation r t (D r t)) (Computation r t (D r t)) r t
-     -- , CRing (D r t) (Computation r t (D r t)) r t
-
-     -- , StarSemiring (D r t) r t
-     -- , StarSemiring (Computation r t (D r t)) r t
-
-     -- , KleeneAlgebra (D r t) (D r t) r t
-     -- , KleeneAlgebra (Computation r t (D r t)) (D r t) r t
-     -- , KleeneAlgebra (Computation r t (D r t)) (Computation r t (D r t)) r t
-     -- , KleeneAlgebra (D r t) (Computation r t (D r t)) r t
-
-     -- )
-
-
+zero :: (P.AdditiveUnital a, Show a) => D s r a
+zero = D P.zero
+one ::(P.MultiplicativeUnital a, Show a) => D s r a
+one = D P.one
 
 -- Get Tangent
-t :: forall r s a. (AdditiveUnital (D s r a) r a)
-  => D s r a
+t :: forall s r a.
+  D s r a
   -> Computation s a (Tangent s r a)
 t =
   \case
@@ -184,67 +45,64 @@ t =
 
 
 initComp :: forall a r. (P.Fractional a) => ComputationState r a
-initComp = ComputationState (Tag 0) (UID 0) M.empty HM.empty M.empty (1e-6 :: a) 1000
+initComp = ComputationState (Tag 0) (UID 0) M.empty M.empty (1e-6 :: a) (P.sum $ P.replicate 1000 1)
 
 
 mkForward :: () => Tag -> Tangent s r a -> Primal s r a  -> D s r a
 mkForward i tg d  = DF d tg i
 
 
-mkReverse :: ( Trace Noop s r a) => Tag -> D s r a -> Computation s a (D s r a)
+mkReverse :: ( Trace s Noop r a) => Tag -> D s r a -> Computation s a (D s r a)
 mkReverse i d = r d (N Noop) i
 
-instance Trace Noop s r a where
+instance Trace s Noop  r a where
   pushAlg _ _ = pure []
   resetAlg _ = pure []
 
 addDeltas :: 
-     ( Additive (D s r a) (D s r a) r a
-     , AdditiveModule r (D s r a) (D s r a) a
-     , AdditiveBasis r (D s r a) (D s r a) a
-     , Additive (D s r a) (D s rr a) rrr a
-     , AdditiveModule rrr (D s r a) (D s rr a) a
-     , AdditiveBasis rrr (D s r a) (D s rr a) a
-     )
-  => D s r a
+     D s r a
   -> D s rr a
   -> Computation s a (D s rrr a)
 addDeltas a b =
   case (a, b) of
-    (D xa, D xb)   -> a + b
+    (D xa, D xb)   -> a .+. b
     (Dm ma, D xb)  -> a .+ b
     (D xa, Dm mb)  -> a +. b
-    (Dm ma, Dm mb) -> a .+. b
+    (Dm ma, Dm mb) -> a .+. b -- can I just just use binOp Add a b and define the instance to be on the correct combination of dimensions?
 
-applyDelta ::
-     ( Additive (D s r a) (D s r a) r a
-     , AdditiveModule r (D s r a) (D s r a) a
-     , AdditiveBasis r (D s r a) (D s r a) a
-     )
-  => UID
+applyDelta :: UID
   -> D s r a
-  -> (Computation s a (D s rr a))
+  -> Maybe (Computation s a (D s rr a))
 applyDelta uniq dlta = do
-  st <- cGet
+  st <- get
   let adjs = st ^. adjoints
-  let km = st ^. uidKeyMap
-  case M.lookup uniq km of
-    Just (sk) ->
-      case sk of
-        (SomeKey (k :: HM.HKey s (D s rk a))) ->
-          case HM.lookup k adjs of
-            Just (v :: (D s rk a)) -> do
-              (r ::  (D s rd a)) <- addDeltas v dlta
-              nk <- HM.getKey
-              lift $
-                modify
-                  (\st ->
-                     st & adjoints .~ HM.update (const . Just $ r) nk adjs &
-                     uidKeyMap %~
-                     (M.insert uniq (SomeKey nk)))
-              pure r
-            _ -> error "Couldn't find HKey in adjoints!"
-    _ -> error $ "Couldn't find HKey for id " ++ show uniq
+  case M.lookup uniq adjs of
+    Just (SomeD v) -> Just $ do
+      e <- dlta
+      r <- addDeltas v e
+      modify (& adjoints .~ M.update (const . Just . SomeD $ r) uniq adjs)
+      return r
+    Nothing -> Nothing
+  -- st <- cGet
+  -- let adjs = st ^. adjoints
+  -- let km = st ^. uidKeyMap
+  -- case M.lookup uniq km of
+  --   Just (sk) ->
+  --     case sk of
+  --       (SomeKey (k :: HM.HKey s (D s rk a))) ->
+  --         case HM.lookup k adjs of
+  --           Just (v :: (D s rk a)) -> do
+  --             (r ::  (D s rd a)) <- addDeltas v dlta
+  --             nk <- HM.getKey
+  --             lift $
+  --               modify
+  --                 (\st ->
+  --                    st & adjoints .~ HM.update (const . Just $ r) nk adjs &
+  --                    uidKeyMap %~
+  --                    (M.insert uniq (SomeKey nk)))
+  --             pure r
+  --           _ -> error "Couldn't find HKey in adjoints!"
+  --   _ -> error $ "Couldn't find HKey for id " ++ show uniq
  
 
 decrementFanout :: UID -> Fanouts s a -> (Maybe Tag, Fanouts s a)
@@ -259,21 +117,20 @@ incrementFanout u = do
 
   (case mf of
       Nothing -> do
-        cPut (st & fanouts %~ M.insert u (Tag 1))
+        put (st & fanouts %~ M.insert u (Tag 1))
         return $ Tag 1
       Just f -> do
-        cPut (st & fanouts %~ const a)
+        put (st & fanouts %~ const a)
         return f)
 
 zeroAdj :: -- forall r s a. (AdditiveUnital (D s r a) r a)
   -- =>
   UID
   -> Computation s a ()
-zeroAdj uniq = do
-  (nk :: HM.HKey s (D s r a)) <- HM.getKey
-  lift $ modify (\st -> st & uidKeyMap %~ ( M.insert uniq (SomeKey nk))& adjoints %~ HM.insert nk ((zero :: D s r a)))
+zeroAdj uniq =
+  modify (& adjoints %~ M.insert uniq (SomeD zero))
 
-reset :: (AdditiveUnital (D s r a) r a, Show a) => [D s r a] -> Computation s a ()
+reset :: [D s r a] -> Computation s a ()
 reset l =
   case l of
     [] -> return ()
@@ -291,14 +148,7 @@ reset l =
         _ -> reset xs
 
 -- recursively pushes nodes onto the reverse mode stack and composes partials at node
-push ::
-     ( AdditiveUnital (D s r a) r a
-     , Show a
-     , Additive (D s r a) (D s r a) r a
-     , AdditiveModule r (D s r a) (D s r a) a
-     , AdditiveBasis r (D s r a) (D s r a) a
-     )
-  => [(D s r a, D s r a)]
+push :: [(D s r a, D s r a)]
   -> Computation s a ()
 push l =
   case l of
@@ -322,26 +172,14 @@ push l =
         _ -> push xs
 
 reverseReset ::
-     ( AdditiveUnital (D s r a) r a
-     , Show a
-     , Additive (D s r a) (D s r a) r a
-     , AdditiveModule r (D s r a) (D s r a) a
-     , AdditiveBasis r (D s r a) (D s r a) a
-     )
-  => D s r a
+     D s r a
   -> Computation s a ()
 reverseReset d = do
-  lift $ modify (& fanouts .~ M.empty )
+  modify (& fanouts .~ M.empty )
   reset [ d]
 
 reverseProp ::
-     ( AdditiveUnital (D s r a) r a
-     , Show a
-     , Additive (D s r a) (D s r a) r a
-     , AdditiveModule r (D s r a) (D s r a) a
-     , AdditiveBasis r (D s r a) (D s r a) a
-     )
-  => D s r a
+     D s r a
   -> D s r a
   -> Computation s a ()
 reverseProp  v d = do
@@ -350,26 +188,24 @@ reverseProp  v d = do
 
 {-# INLINE primalTanget #-}
 primalTanget ::
-     (Show a, AdditiveUnital (D s r a) r a)
-  => D s r a
+     D s r a
   -> Computation s a (D s r a, Tangent s r a)
 primalTanget d = do
   ct <- t d
   pure (p d, ct)
 
-adjoint ::
-     forall a s r. (Show a, AdditiveUnital (D s r a) r a)
-  => D s r a
-  -> Computation s a (D s r a)
+adjoint :: 
+      D s r a
+  -> Computation s a (D s rr a)
 adjoint d =
   case d of
     DR _ _ _ uniq -> do
-      ma <- lift $ gets (\st -> M.lookup uniq (st ^. adjoints))
+      ma <- gets (\st -> M.lookup uniq (st ^. adjoints))
       case ma of
-        Just a  -> return a
+        Just (SomeD a)  -> return a
         Nothing -> error "Adjoint not in map!"
     DF{} -> error "Cannot get adjoint value of DF. Use makeReverse on this node when composing the computation."
-    D _ -> pure (zero :: D s r a)
+    D _ -> pure zero
 
 
 runComputation :: () => State s a -> s -> (a, s)
@@ -380,46 +216,24 @@ compute f = evalState f initComp
 
 {-# INLINE computeAdjoints' #-}
 computeAdjoints' ::
-     forall a s r.
-     ( Show a
-     , AdditiveUnital (D s r a) r a
-     -- , MultiplicativeUnital (D s r a) r a
-     , Additive (D s r a) (D s r a) r a
-     , AdditiveModule r (D s r a) (D s r a) a
-     , AdditiveBasis r (D s r a) (D s r a) a
-     )
-  => D s r a
+     D s r a
   -> Computation s a ()
 computeAdjoints' d = do
-  modify (\st -> st & adjoints .~ M.empty)
+  modify (& adjoints .~ M.empty)
   o <- pure (one :: D s r a)
   reverseProp o d
 
 {-# INLINE computeAdjoints #-}
 computeAdjoints ::
-     ( Show a
-     , AdditiveUnital (D s r a) r a
-     -- , MultiplicativeUnital (D s r a) r a
-     , Additive (D s r a) (D s r a) r a
-     , AdditiveModule r (D s r a) (D s r a) a
-     , AdditiveBasis r (D s r a) (D s r a) a
-     )
-  => D s r a
-  -> Computation s a (Adjoints)
+     D s r a
+  -> Computation s a (Adjoints s a)
 computeAdjoints d = do
   computeAdjoints' d
   st <- get
   return $ st ^. adjoints
 {-# INLINE diff' #-}
 
-diff' :: forall a s r.
-     ( Show a
-     , AdditiveUnital (D s r a) r a
-     -- , MultiplicativeUnital (D s r a) r a
-     , Additive (D s r a) (D s r a) r a
-     , AdditiveModule r (D s r a) (D s r a) a
-     , AdditiveBasis r (D s r a) (D s r a) a)
-  => (D s r a -> Computation s a (D s r a))
+diff' :: (D s r a -> Computation s a (D s r a))
   -> D s r a
   -> Computation s a (D s r a, Tangent s r a)
 diff' f x = do
@@ -430,13 +244,7 @@ diff' f x = do
 {-# INLINE diff #-}
 
 diff ::
-     ( Show a
-     , AdditiveUnital (D s r a) r a
-     -- , MultiplicativeUnital (D s r a) r a
-     , Additive (D s r a) (D s r a) r a
-     , AdditiveModule r (D s r a) (D s r a) a
-     , AdditiveBasis r (D s r a) (D s r a) a)
-  => (D s r a -> Computation s a (D s r a))
+     (D s r a -> Computation s a (D s r a))
   -> D s r a
   -> Computation s a (Tangent s r a)
 diff f x =
@@ -444,14 +252,7 @@ diff f x =
 
 {-# INLINE diffn #-}
 diffn ::
-     ( Show a
-     , AdditiveUnital (D s r a) r a
-     -- , MultiplicativeUnital (D s r a) r a
-     , Additive (D s r a) (D s r a) r a
-     , AdditiveModule r (D s r a) (D s r a) a
-     , AdditiveBasis r (D s r a) (D s r a) a
-     )
-  => Int
+     Int
   -> (D s r a -> Computation s a (D s r a))
   -> D s r a
   -> Computation s a (Tangent s r a)
@@ -463,14 +264,7 @@ diffn n f x =
            else go n f x
   where
     go ::
-         ( Show a
-         , AdditiveUnital (D s r a) r a
-         -- , MultiplicativeUnital (D s r a) r a
-         , Additive (D s r a) (D s r a) r a
-         , AdditiveModule r (D s r a) (D s r a) a
-         , AdditiveBasis r (D s r a) (D s r a) a
-         )
-      => Int
+        Int
       -> (D s r a -> Computation s a (D s r a))
       -> D s r a
       -> Computation s a (Tangent s r a)
@@ -481,14 +275,7 @@ diffn n f x =
 
 {-# INLINE diffn' #-}
 diffn' ::
-     ( Show a
-     , AdditiveUnital (D s r a) r a
-     -- , MultiplicativeUnital (D s r a) r a
-     , Additive (D s r a) (D s r a) r a
-     , AdditiveModule r (D s r a) (D s r a) a
-     , AdditiveBasis r (D s r a) (D s r a) a
-     )
-  => Int
+     Int
   -> (D s r a -> Computation s a (D s r a))
   -> D s r a
   -> Computation s a (D s r a, (Tangent s r a))
@@ -499,15 +286,7 @@ diffn' n f x = do
 
 {-# INLINE grad' #-}
 grad' ::
-     ( Trace Noop s r a
-     , Show a
-     , AdditiveUnital (D s r a) r a
-     -- , MultiplicativeUnital (D s r a) r a
-     , Additive (D s r a) (D s r a) r a
-     , AdditiveModule r (D s r a) (D s r a) a
-     , AdditiveBasis r (D s r a) (D s r a) a
-     )
-  => (D s r a -> Computation s a (D s r a))
+     (D s r a -> Computation s a (D s r a))
   -> D s r a
   -> Computation s a (D s r a, (D s r a))
 grad' f x = do
@@ -520,15 +299,7 @@ grad' f x = do
 
 {-# INLINE grad #-}
 grad ::
-     ( Trace Noop s r a
-     , Show a
-     , AdditiveUnital (D s r a) r a
-     -- , MultiplicativeUnital (D s r a) r a
-     , Additive (D s r a) (D s r a) r a
-     , AdditiveModule r (D s r a) (D s r a) a
-     , AdditiveBasis r (D s r a) (D s r a) a
-     )
-  => (D s r a -> Computation s a (D s r a))
+      (D s r a -> Computation s a (D s r a))
   -> D s r a
   -> Computation s a (D s r a)
 grad f x = do
@@ -537,15 +308,7 @@ grad f x = do
 
 -- Original value and Jacobian product of `f`, at point `x`, along `v`. Forward AD.
 jacobian' ::
-     ( Show a
-     , Show a
-     , AdditiveUnital (D s r a) r a
-     -- , MultiplicativeUnital (D s r a) r a
-     , Additive (D s r a) (D s r a) r a
-     , AdditiveModule r (D s r a) (D s r a) a
-     , AdditiveBasis r (D s r a) (D s r a) a
-     )
-  => (D s r a -> Computation s a (D s r a))
+     (D s r a -> Computation s a (D s r a))
   -> Tangent s r a
   -> Primal s r a
   -> Computation s a (D s r a, Tangent s r a)
@@ -555,14 +318,7 @@ jacobian' f x v = do
   primalTanget fout
 
 jacobian ::
-     ( Show a
-     , AdditiveUnital (D s r a) r a
-     -- , MultiplicativeUnital (D s r a) r a
-     , Additive (D s r a) (D s r a) r a
-     , AdditiveModule r (D s r a) (D s r a) a
-     , AdditiveBasis r (D s r a) (D s r a) a
-     )
-  => (D s r a -> Computation s a (D s r a))
+      (D s r a -> Computation s a (D s r a))
   -> Tangent s r a
   -> Primal s r a
   -> Computation s a (Tangent s r a)

@@ -1,5 +1,5 @@
 {-# OPTIONS_GHC -Wall #-}
-
+{-#LANGUAGE NoImplicitPrelude#-}
 -- | A prelude for NumHask
 module Internal.NumHask.Prelude
   ( -- * Backend
@@ -32,7 +32,8 @@ import Protolude
                zero)
 
 import Internal.NumHask.Algebra.Additive
-
+import Internal.Internal
+import qualified NumHask.Array as A
 -- import Internal.NumHask.Algebra.Distribution
 -- import Internal.NumHask.Algebra.Field
 

@@ -44,6 +44,7 @@ import           NumHask.Prelude            hiding (Show, State, StateT,
 import qualified NumHask.Prelude            as E
 import qualified NumHask.Prelude            as P
 import           Protolude.Error
+import GHC.Exts (Item(..))
 --import           Type.Reflection            (SomeTypeRep (..), TypeRep)
 -- import           Data.Dependent.Sum
 -- import           Data.Functor.Identity
@@ -73,8 +74,12 @@ type Computation c a  = StateT (ComputationState c a) Identity
 
 type Operable c r a  = (E.Additive a, Dim.Dimensions r, A.Container c)
 
+type family Scalar where
+  Scalar = '[1]
+
 data D c r a where
-  D :: (Show (A.Array c r a), Operable c r a) => A.Array c r a -> D c r a
+  D :: (Show a) => a -> D c r a
+  Dm :: (Show (A.Array c r a), Operable c r a, Show a, Item (c a) ~ a, Item (A.Array c r a) ~ a) => A.Array c r a -> D c r a
   --Dm :: (Show (A.Array c s a)) => A.Array c s a -> D c s a
   DF :: Primal c r a -> Tangent c r a -> Tag -> D c r a
   DR
@@ -95,7 +100,7 @@ type SameContainer a b = (GetContainer a ~ GetContainer b)
 
 instance (Show a, Show UID) => Show (D c r a) where
   show (D a)            = "D " ++ GHC.Show.show a
-  -- show (Dm a)           = "D " ++  GHC.Show.show (a)
+  show (Dm a)           = "Dm " ++  GHC.Show.show (a)
   show (DF p t ti)      = "DF " ++  GHC.Show.show p ++ GHC.Show.show t ++ (" Tag  ")
   show (DR p dt ti uid) = "DR " ++  GHC.Show.show p ++  GHC.Show.show dt ++  (" Tag  ")  ++  GHC.Show.show uid
 
@@ -178,7 +183,7 @@ p :: D c r a -> D c r a
 p =
   \case
     D v -> D v
-    -- Dm v -> Dm v
+    Dm v -> Dm v
     DF d _ _ -> d
     DR d _ _ _ -> d
 
@@ -187,7 +192,7 @@ pD :: D c r a -> D c r a
 pD =
   \case
     D v -> D v
-    --  Dm v -> Dm v
+    Dm v -> Dm v
     DF d _ _ -> pD d
     DR d _ _ _ -> pD d
 
@@ -198,18 +203,18 @@ instance (Eq a) => Eq (D c r a) where
 instance (Ord a) => Ord (D c r a) where
   d1 `compare` d2 = pD d1 `compare` pD d2
 
-toNumeric :: D c r a -> A.Array c r a
+-- toNumeric :: (Item (A.Array c r a) ~ a)=> D c r a -> A.Array [] r a
 
-toNumeric d =
-  case pD d of
-    D v -> v
-    -- Dm v -> v
+-- toNumeric d =
+--   case pD d of
+--     D v -> [v] :: A.Array [] '[1] a
+--     Dm v -> v
 
 class (E.Additive a) => FfMon op a where
   ff :: op -> a ->  a
 
--- class RffMon op a r where
---   rff :: op -> r a -> r a
+class RffMon op a r where
+  rff :: op -> r a -> r a
 
 class (Operable c r a) => MonOp c op r a where
 
@@ -223,14 +228,14 @@ class (Operable c r a) => MonOp c op r a where
     -> m (D c r a)
 -- {-#INLINE monOp #-}
 monOp :: 
-     (MonOp c op r a, FfMon op a, (Trace c op r a), Show op,  FfMon op (A.Array c r a))
+     (MonOp c op r a, FfMon op a, (Trace c op r a), Show op,  FfMon op (A.Array c r a), RffMon op a (A.Array c r))
   => op
   -> D c r a
   -> Computation c a (D c r a)
 monOp op a =
   case a of
     D ap -> return . D $ ff op ap
-    -- Dm ap -> return . Dm $ rff op ap
+    Dm ap -> return . Dm $ rff op ap
     DF ap at ai -> do
       cp <- fd op ap
       cdf <- df op cp ap at
@@ -259,20 +264,20 @@ class (Operable c r b) => DfDbBin c op r a b | a -> b where
     -> D c r b
     -> m (D c r b)
 
--- class (Show op, E.AdditiveBasis r a, E.AdditiveModule r a) =>
---       FfBin c op a r where
---   rff_bin :: op -> r a -> r a -> r a -- Forward mode function for arrays
---   rff_bin op _ _ =
---     GHC.Err.error $
---     "array x array operation is not defined for " ++ (GHC.Show.show op)
---   r_ff_bin :: op -> r a -> a -> r a -- For scalar x arrays
---   r_ff_bin op _ _ =
---     GHC.Err.error $
---     "array x scalar operation is not defined for " ++ (GHC.Show.show op)
---   _ff_bin :: op -> a -> r a -> r a -- For scalar x arrays
---   _ff_bin op _ _ =
---     GHC.Err.error $
---     "scalar x array operation is not defined for " ++ (GHC.Show.show op)
+class (Show op, E.AdditiveBasis r a, E.AdditiveModule r a) =>
+      FfBin op a r where
+  rff_bin :: op -> r a -> r a -> r a -- Forward mode function for arrays
+  rff_bin op _ _ =
+    GHC.Err.error $
+    "array x array operation is not defined for " ++ (GHC.Show.show op)
+  r_ff_bin :: op -> r a -> a -> r a -- For scalar x arrays
+  r_ff_bin op _ _ =
+    GHC.Err.error $
+    "array x scalar operation is not defined for " ++ (GHC.Show.show op)
+  _ff_bin :: op -> a -> r a -> r a -- For scalar x arrays
+  _ff_bin op _ _ =
+    GHC.Err.error $
+    "scalar x array operation is not defined for " ++ (GHC.Show.show op)
 
 
 class (Operable c r d) => DfBin c op r a b d | a b -> d where
@@ -298,6 +303,7 @@ class (Show op) =>
        , BinOp op (A.Array c r a)
        , DfDaBin c op r (D c r a) a
        , DfDbBin c op r (D c r a) a
+       , FfBin op a (A.Array c r)
        )
     => op
     -> (D c r a)
@@ -309,7 +315,7 @@ class (Show op) =>
       D ap ->
         case b of
           D bp -> return . D $ ff_bin op ap bp
-          --Dm bp -> return . Dm $ _ff_bin op ap bp
+          Dm bp -> return . Dm $ _ff_bin op ap bp
           DF bp bt bi -> do
             cp <- fd_bin op a bp
             cdf <- df_db op a cp bp bt
@@ -317,27 +323,27 @@ class (Show op) =>
           DR bp _ bi _ -> do
             cfd <- fd_bin op a bp
             r (cfd) (B op a b) bi
-      -- Dm ap ->
-      --   case b of
-      --     D bp -> return . Dm $ r_ff_bin op ap bp
-      --     Dm bp -> return . Dm $ rff_bin op ap bp
-      --     DF bp bt bi -> do
-      --       cp <- fd_bin op a bp
-      --       cdf <- df_db op a cp bp bt
-      --       return $ DF cp cdf bi
-      --     DR bp _ bi _ -> do
-      --       cfd <- fd_bin op a bp
-      --       r (cfd) (B op a b) bi
+      Dm ap ->
+        case b of
+          D bp -> return . Dm $ r_ff_bin op ap bp
+          Dm bp -> return . Dm $ rff_bin op ap bp
+          DF bp bt bi -> do
+            cp <- fd_bin op a bp
+            cdf <- df_db op a cp bp bt
+            return $ DF cp cdf bi
+          DR bp _ bi _ -> do
+            cfd <- fd_bin op a bp
+            r (cfd) (B op a b) bi
       DF ap at ai ->
         case b of
           D _ -> do
             cp <- fd_bin op ap b
             cdf <- df_da op b cp ap at
             return $ DF cp (cdf) ai
-          -- Dm _ -> do
-          --   cp <- fd_bin op ap b
-          --   cdf <- df_da op b cp ap at
-          --   return $ DF cp (cdf) ai
+          Dm _ -> do
+            cp <- fd_bin op ap b
+            cdf <- df_da op b cp ap at
+            return $ DF cp (cdf) ai
           DF bp bt bi ->
             case compare ai bi of
               EQ -> do
@@ -369,9 +375,9 @@ class (Show op) =>
           D _ -> do
             fda <- fd_bin op ap b
             r (fda) (B op a b) ai
-          -- Dm _ -> do
-          --   fda <- fd_bin op ap b
-          --   r (fda) (B op a b) ai
+          Dm _ -> do
+            fda <- fd_bin op ap b
+            r (fda) (B op a b) ai
           DF bp bt bi ->
             case compare ai bi of
               EQ ->
