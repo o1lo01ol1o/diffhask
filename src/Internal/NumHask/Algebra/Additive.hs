@@ -6,13 +6,13 @@
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE MultiParamTypeClasses  #-}
 {-# LANGUAGE NoImplicitPrelude      #-}
+{-# LANGUAGE OverloadedLists        #-}
 {-# LANGUAGE Rank2Types             #-}
 {-# LANGUAGE TypeFamilies           #-}
 {-# LANGUAGE TypeFamilyDependencies #-}
 {-# LANGUAGE TypeInType             #-}
-{-# LANGUAGE OverloadedLists             #-}
 {-# LANGUAGE UndecidableInstances   #-}
-
+{-# LANGUAGE UndecidableSuperClasses   #-}
 -- | A magma heirarchy for addition. The basic magma structure is repeated and prefixed with 'Additive-'.
 module Internal.NumHask.Algebra.Additive
   ( -- AdditiveMagma(..)
@@ -31,140 +31,40 @@ module Internal.NumHask.Algebra.Additive
   , AdditiveModule(..)
   , Add(..)
   , Negate(..)
-  , AdditiveBasisConstraints
   ) where
+import           GHC.Exts
 import           Internal.Internal
-import qualified NumHask.Array     as A
-import           NumHask.Prelude   (Bool (..), Double, Float, Int, Integer,
-                                    Show, pure, ($))
-import qualified NumHask.Prelude   as P
-import qualified NumHask.Prelude   as E
 import qualified Numeric.Dimensions as Dim
-import GHC.Exts
-
-type AdditiveBasisConstraints c r t
-   = ( E.Num t
-     , Dim.Dimensions r
-     , A.Container c
-     , E.AdditiveBasis (A.Array c r) t
-     , E.AdditiveInvertible ((A.Array c r) t)
-     , E.AdditiveGroupBasis (A.Array c r) t
-     , E.AdditiveGroupModule (A.Array c r) t
-     , E.AdditiveModule (A.Array c r) t)
-
-
-data Add = Add deriving Show
+import qualified NumHask.Array      as A
+import           NumHask.Prelude    (Bool (..), Double, Float, Int, Integer,
+                                     Show, pure, ($))
+import qualified NumHask.Prelude    as P
+import qualified NumHask.Prelude    as E
+import Control.Monad ((>>=))
 
 data Negate = Negate deriving Show
 
-instance (E.Additive a) => BinOp Add a where
-  {-# INLINE ff_bin #-}
-  ff_bin _ a b = b `P.plus` a
-
-instance (E.AdditiveBasis r a, E.AdditiveModule r a) => FfBin Add a r where
-  {-# INLINE rff_bin #-}
-  rff_bin _ a b = a E..+. b
-  {-# INLINE r_ff_bin #-}
-  r_ff_bin _ a b = a E..+ b
-  {-# INLINE _ff_bin #-}
-  _ff_bin _ a b = a E.+. b
-
-instance (Operable s r a) => DfDaBin s Add r (D s r a) a where
-  {-# INLINE df_da #-}
-  df_da _ _ _ _ at = pure at
-
-
-instance (Operable s r a) =>DfDbBin s Add r (D s r a) a where
-  {-# INLINE df_db #-}
-  df_db _ _ _ _ bt = pure bt
-
-instance (Operable s r a) =>DfBin s Add r (D s r a) (D s r a) a where
-  {-# INLINE fd_bin #-}
-  fd_bin _ a b = binOp Add a b
-  {-# INLINE df_dab #-}
-  df_dab _ _ _ _ _ at _ bt = binOp Add at bt
-
-instance  Trace s Add  r a where
-  pushAlg (B _ a b) dA = pure [(dA, a), (dA, b), (dA, a), (dA, b)]
-  resetAlg (B _ a b) = pure [a, b, a, b]
-
-
--- data Ladd = Ladd deriving Show
-
--- instance (E.Additive b, E.AdditiveGroup a) => BinOp Ladd a where
---   {-# INLINE ff_bin #-}
---   ff_bin _ a b = b P..+ a
-
--- instance (E.AdditiveBasis r a, E.AdditiveModule r a) => FfBin Add a r where
---   {-# INLINE rff_bin #-}
---   rff_bin _ a b = a E..+. b
---   {-# INLINE r_ff_bin #-}
---   r_ff_bin _ a b = a E..+ b
---   {-# INLINE _ff_bin #-}
---   _ff_bin _ a b = a E.+. b
-
--- instance (Operable s r a) => DfDaBin s Ladd r (D s r a) a where
---   {-# INLINE df_da #-}
---   df_da _ _ _ _ at = pure at
-
-
--- instance (Operable s r a) =>DfDbBin s Ladd r (D s r a) a where
---   {-# INLINE df_db #-}
---   df_db _ _ _ _ bt = pure bt
-
--- instance (Operable s r a) =>DfBin s Ladd r (D s r a) (D s r a) a where
---   {-# INLINE fd_bin #-}
---   fd_bin _ a b = binOp Add a b
---   {-# INLINE df_dab #-}
---   df_dab _ _ _ _ _ at _ bt = binOp Ladd at bt
-
--- instance  Trace s Ladd  r a where
---   pushAlg (B _ a b) dA = pure [(dA, a), (dA, b), (dA, a), (dA, b)]
---   resetAlg (B _ a b) = pure [a, b, a, b]
-
-instance (E.AdditiveInvertible a, E.Additive a) => FfMon Negate a where
-  {-# INLINE ff #-}
-  ff _ a = P.negate a
-
-instance (AdditiveBasisConstraints s r a) => MonOp s Negate r a where
+instance (IsMonOp Negate s r a) => MonOp s Negate r a where
   {-# INLINE fd #-}
   fd _ a = monOp Negate a
   {-# INLINE df #-}
   df _ _ _ at = monOp Negate at
 
-instance (E.AdditiveInvertible (A.Array c r a))=> RffMon Negate a (A.Array c r) where
-  rff _ a = P.negate a
 
-instance (AdditiveBasisConstraints s r a) => Trace s Negate r a where
-  pushAlg (U _ a) dA = do
-    cda <- monOp Negate dA
-    pure [(cda, a)]
-  resetAlg (U _ a) = pure [a]
+class (E.Monad m, IsMonOp Negate c r t) => AdditiveInvertible m c r a t | a -> t, a -> r  where
+  negate ::a -> ComputationT c t m (D c (MonCalcShape r) t)
 
 
-class AdditiveInvertible c r a t | a -> t, a -> r where
-  negate :: a -> Computation c t (D c r t)
-
-instance (AdditiveBasisConstraints c s Double) =>
-         AdditiveInvertible c s (Computation c Double (D c s Double)) Double where
+instance (E.Monad m, IsMonOp Negate c r t) =>
+         AdditiveInvertible m c r (ComputationT c t m (D c r t)) t where
   negate a = do
     ca <- a
     monOp Negate ca
 
-instance (AdditiveBasisConstraints c s Float) =>
-         AdditiveInvertible c s (Computation c Float (D c s Float)) Float where
-  negate a = do
-    ca <- a
-    monOp Negate ca
+instance (E.Monad m, IsMonOp Negate c s t) =>
+         AdditiveInvertible m c s (D c s t) t where
+  negate a= monOp Negate a
 
-instance (AdditiveBasisConstraints c s Float) =>
-         AdditiveInvertible c s (D c s Float) Float where
-  negate a = monOp Negate a
-
-instance (AdditiveBasisConstraints c s Double) =>
-         AdditiveInvertible c s (D c s Double) Double where
-  negate a = monOp Negate a
-    
 
 -- | Additive Module Laws
 --
@@ -172,15 +72,15 @@ instance (AdditiveBasisConstraints c s Double) =>
 -- > (a + b) .+ c == (a .+ c) + b
 -- > a .+ zero == a
 -- > a .+ b == b +. a
-class 
-      AdditiveModule c r a b t | a -> t, b -> t, a b -> t, a -> r where
+class (E.Monad m, IsBinOp c Add (GetShape a) (GetShape b) t, GetShape b ~ '[]) =>
+      AdditiveModule m c a b t | a -> t, b -> t, a b -> t where
   infixl 6 .+
-  (.+) ::  a -> b -> Computation c t (D c r t)
+  (.+) ::  a -> b -> ComputationT c t m (D c (BinCalcShape (GetShape a) (GetShape b)) t)
   infixl 6 +.
-  (+.) :: b -> a -> Computation c t (D c r t)
+  (+.) :: b -> a -> ComputationT c t m (D c (BinCalcShape  (GetShape a) (GetShape b)) t)
 
-instance (AdditiveBasisConstraints c s Double) =>
-         AdditiveModule c s (Computation c Double (D c s Double)) (D c s Double)  Double where
+instance (E.Monad m, IsBinOp c Add ar '[] t) =>
+         AdditiveModule m c (ComputationT c t m (D c ar t)) (D c '[] t)  t where
   (.+) a b = do
     ca <- a
     binOp Add ca b
@@ -188,8 +88,8 @@ instance (AdditiveBasisConstraints c s Double) =>
     ca <- a
     binOp Add ca b
 
-instance (AdditiveBasisConstraints c s Double) =>
-         AdditiveModule c s (Computation c Double (D c s Double)) (Computation c Double (D c s Double)) Double where
+instance (E.Monad m, IsBinOp c Add ar '[] t) =>
+         AdditiveModule m c (ComputationT c t m (D c ar t)) (ComputationT c t m (D c '[] t)) t where
   (.+) a b = do
     ca <- a
     cb <- b
@@ -197,43 +97,15 @@ instance (AdditiveBasisConstraints c s Double) =>
   (+.) a b = do
     ca <- a
     cb <- b
-    binOp Add ca cb
+    binOp Add cb ca
 
-instance (AdditiveBasisConstraints c s Double) =>
-         AdditiveModule c s (D c s Double) (D c s Double) Double where
+instance (E.Monad m, IsBinOp c Add ar '[] t) =>
+         AdditiveModule m c (D c ar t) (D c '[] t) t where
   (.+) a b = binOp Add a b
-  (+.) a b = binOp Add a b
+  (+.) a b = binOp Add b a
 
-instance (AdditiveBasisConstraints c s Double) =>
-         AdditiveModule c s  (D c s Double) Double Double where
-  (.+) a b = binOp Add a (D b)
-  (+.) a b = binOp Add (D a) b
-
-instance (AdditiveBasisConstraints c s Double) =>
-         AdditiveModule c s (Computation c Double  (D c s Double)) Double Double where
-  (.+) a b = do
-    ca <- a
-    binOp Add ca (D b)
-  (+.) a b = do
-    cb <- b
-    binOp Add (D a) cb
-
-instance (AdditiveBasisConstraints c s Float) =>
-         AdditiveModule c s  (D c s Float) Float Float where
-  (.+) a b = binOp Add a (D b)
-  (+.) a b = binOp Add (D a) b
-
-instance (AdditiveBasisConstraints c s Float) =>
-         AdditiveModule c s (Computation c Float  (D c s Float)) Float Float where
-  (.+) a b = do
-    ca <- a
-    binOp Add ca (D b)
-  (+.) a b = do
-    cb <- b
-    binOp Add (D a) cb
-
-instance (AdditiveBasisConstraints c s Double) =>
-         AdditiveModule c s (D c s Double) (Computation c Double  (D c s Double)) Double where
+instance (E.Monad m, IsBinOp c Add ar '[] t) =>
+         AdditiveModule m c (D c ar t) (ComputationT c t m (D c '[] t))   t where
   (.+) a b = do
     cb <- b
     binOp Add a cb
@@ -241,134 +113,94 @@ instance (AdditiveBasisConstraints c s Double) =>
     cb <- b
     binOp Add a cb
 
-instance (AdditiveBasisConstraints c s Float) =>
-         AdditiveModule c s (D c s Float) (D c s Float) Float where
-  (.+) a b = binOp Add a b
-  (+.) a b = binOp Add a b
 
-instance (AdditiveBasisConstraints c s Float) =>
-         AdditiveModule c s (D c s Float) (Computation c Float  (D c s Float)) Float where
-  (.+) a b = do
-    cb <- b
-    binOp Add a cb
-  (+.) b a = do
-    cb <- b
-    binOp Add a cb
-
-instance (AdditiveBasisConstraints c s Float) =>
-         AdditiveModule c s (Computation c Float  (D c s Float)) (D c s Float)  Float where
-  (.+) a b = do
-    ca <- a
-    binOp Add ca b
-  (+.) b a = do
-    ca <- a
-    binOp Add ca b
-
-instance (AdditiveBasisConstraints c s Float) =>
-         AdditiveModule c s (Computation c Float (D c s Float)) (Computation c Float (D c s Float)) Float where
-  (.+) a b = do
-    ca <- a
-    cb <- b
-    binOp Add ca cb
-  (+.) a b = do
-    ca <- a
-    cb <- b
-    binOp Add ca cb
 -- | Subtraction Module Laws
 --
 -- > (a + b) .- c == a + (b .- c)
 -- > (a + b) .- c == (a .- c) + b
 -- > a .- zero == a
--- > a .- b == negate b +. a
-class 
-      AdditiveGroupModule c r a b t | a -> t, b -> t, a b -> t, a -> r where
+-- > a .- b == monOp Negate b +. a
+class ( AdditiveModule m c a b t
+      , AdditiveInvertible m c (GetShape a) a t
+      , AdditiveInvertible m c (GetShape b) b t
+      , GetShape b ~ '[]
+      ) =>
+      AdditiveGroupModule m c a b t | a -> t, b -> t, a b -> t where
   infixl 6 .-
-  (.-) ::  a -> b -> Computation c t (D c r t)
+  (.-) ::
+       a
+    -> b
+    -> ComputationT c t m (D c (BinCalcShape (GetShape a) (MonCalcShape (GetShape b))) t)
   infixl 6 -.
-  (-.) :: b  -> a -> Computation c t (D c r t)
+  (-.) ::
+       a
+    -> b
+    -> ComputationT c t m (D c (BinCalcShape (GetShape a) (MonCalcShape (GetShape b))) t)
 
 
-instance (AdditiveBasisConstraints c s Float) =>
-         AdditiveGroupModule c s (D c s Float) (D c s Float) Float where
+instance ( E.Monad m
+         , IsMonOp Negate c ar t
+         , IsMonOp Negate c '[] t
+         , IsBinOp c Add ar '[] t
+         , MonCalcShape '[] ~ '[]
+         ) =>
+         AdditiveGroupModule m c (D c ar t) (D c '[] t) t where
   (.-) a b = do
     cb <- (negate b)
     binOp Add a cb
   (-.) a b = do
-    cb <- negate b
+    cb <- monOp Negate b
     binOp Add a cb
 
-instance (AdditiveBasisConstraints c s Float) =>
-         AdditiveGroupModule c s (D c s Float) (Computation c Float  (D c s Float)) Float where
-  (.-) a b = do
-    cb <-negate b
-    binOp Add a cb
-  (-.) b a = do
-    cb <- negate b
-    binOp Add a cb
+instance ( E.Monad m
+         , IsMonOp Negate c ar t
+         , IsMonOp Negate c '[] t
+         , IsBinOp c Add ar '[] t
+         , MonCalcShape '[] ~ '[]
+         ) =>
+         AdditiveGroupModule m c (D c ar t) (ComputationT c t m (D c '[] t)) t where
+  (.-) a cb = do
+    b <- cb
+    nb <- monOp Negate b
+    binOp Add a nb
+  (-.) a cb = do
+    b <- cb
+    nb <- monOp Negate b
+    binOp Add a nb
 
-instance (AdditiveBasisConstraints c s Float) =>
-         AdditiveGroupModule c s (Computation c Float  (D c s Float)) (D c s Float)  Float where
-  (.-) a b = do
-    ca <- a
-    cb <- negate b
-    binOp Add ca cb
-  (-.) b a = do
-    ca <- a
-    cb <- negate b
-    binOp Add ca cb
-
-instance (AdditiveBasisConstraints c s Float) =>
-         AdditiveGroupModule c s (Computation c Float (D c s Float)) (Computation c Float (D c s Float)) Float where
-  (.-) a b = do
-    ca <- a
-    cb <- negate b
-    binOp Add ca cb
-  (-.) a b = do
-    ca <-  a
-    cb <- negate b
-    binOp Add ca cb
-
-
-
-instance (AdditiveBasisConstraints c s Double) =>
-         AdditiveGroupModule c s (D c s Double) (D c s Double) Double where
-  (.-) a b = do
-    cb <- (negate b)
-    binOp Add a cb
-  (-.) a b = do
-    cb <- negate b
-    binOp Add a cb
-
-instance (AdditiveBasisConstraints c s Double) =>
-         AdditiveGroupModule c s (D c s Double) (Computation c Double  (D c s Double)) Double where
-  (.-) a b = do
-    cb <- negate b
-    binOp Add a cb
-  (-.) b a = do
-    cb <- negate b
-    binOp Add a cb
-
-instance (AdditiveBasisConstraints c s Double) =>
-         AdditiveGroupModule c s (Computation c Double  (D c s Double)) (D c s Double)  Double where
-  (.-) a b = do
-    ca <-  a
-    cb <- negate b
-    binOp Add ca cb
-  (-.) b a = do
-    ca <-  a
-    cb <- negate b
-    binOp Add ca cb
-
-instance (AdditiveBasisConstraints c s Double) =>
-         AdditiveGroupModule c s (Computation c Double (D c s Double)) (Computation c Double (D c s Double)) Double where
+instance ( E.Monad m
+         , IsMonOp Negate c ar t
+         , IsMonOp Negate c '[] t
+         , IsBinOp c Add ar '[] t
+         , MonCalcShape '[] ~ '[]
+         ) =>
+         AdditiveGroupModule m c (ComputationT c t m (D c ar t)) (D c '[] t) t where
   (.-) a b = do
     ca <- a
-    cb <- negate b
+    cb <- monOp Negate b
     binOp Add ca cb
   (-.) a b = do
     ca <- a
-    cb <- negate b
+    cb <- monOp Negate b
     binOp Add ca cb
+
+instance ( E.Monad m
+         , IsMonOp Negate c ar t
+         , IsMonOp Negate c '[] t
+         , IsBinOp c Add ar '[] t
+         , MonCalcShape '[] ~ '[]
+         ) =>
+         AdditiveGroupModule m c (ComputationT c t m (D c ar t)) (ComputationT c t m (D c '[] t)) t where
+  (.-) a cb = do
+    ca <- a
+    b <- cb
+    nb <- monOp Negate b
+    binOp Add ca nb
+  (-.) a cb = do
+    ca <- a
+    b <- cb
+    nb <- monOp Negate b
+    binOp Add ca nb
 
 -- | element by element addition
 --
@@ -376,131 +208,106 @@ instance (AdditiveBasisConstraints c s Double) =>
 -- > zero .+. a = a
 -- > a .+. zero = a
 -- > a .+. b == b .+. a
-class 
-      AdditiveBasis c r a b t | a b -> r, a b -> t where
+class
+      AdditiveBasis m c r a b t | a b -> r, a b -> t where
   infixl 7 .+.
-  (.+.) :: a -> b -> Computation c t (D c r t)
+  (.+.) :: a -> b -> ComputationT c t m (D c r t)
 
-instance (AdditiveBasisConstraints c s Double) =>
-         AdditiveBasis c s (D c s Double) (D c s Double) Double where
+instance (E.Monad m, IsBinOp c Add s s t) =>
+         AdditiveBasis m c s (D c s t) (D c s t) t where
   (.+.) a b =
     binOp Add a b
 
 
-instance (AdditiveBasisConstraints c s Double) =>
-         AdditiveBasis c s (D c s Double) (Computation c Double  (D c s Double)) Double where
+instance (E.Monad m, IsBinOp c Add s s t) =>
+         AdditiveBasis m c s (D c s t) (ComputationT c t m (D c s t)) t where
   (.+.) a b = do
     cb <-  b
     binOp Add a cb
 
 
-instance (AdditiveBasisConstraints c s Double) =>
-         AdditiveBasis c s (Computation c Double  (D c s Double)) (D c s Double)  Double where
+instance (E.Monad m, IsBinOp c Add s s t) =>
+         AdditiveBasis m c s (ComputationT c t m (D c s t)) (D c s t)  t where
   (.+.) a b = do
     ca <-  a
     binOp Add ca b
 
 
-instance (AdditiveBasisConstraints c s Double) =>
-         AdditiveBasis c s (Computation c Double (D c s Double)) (Computation c Double (D c s Double)) Double where
+instance (E.Monad m, IsBinOp c Add s s t) =>
+         AdditiveBasis m c s (ComputationT c t m (D c s t)) (ComputationT c t m (D c s t)) t where
   (.+.) a b = do
     ca <- a
-    cb <-  b
+    cb <- b
     binOp Add ca cb
 
-
-instance (AdditiveBasisConstraints c s Float) =>
-         AdditiveBasis c s (D c s Float) (D c s Float) Float where
-  (.+.) a b =
-    binOp Add a b
-
-
-instance (AdditiveBasisConstraints c s Float) =>
-         AdditiveBasis c s (D c s Float) (Computation c Float  (D c s Float)) Float where
-  (.+.) a b = do
-    cb <-  b
-    binOp Add a cb
-
-
-instance (AdditiveBasisConstraints c s Float) =>
-         AdditiveBasis c s (Computation c Float  (D c s Float)) (D c s Float)  Float where
-  (.+.) a b = do
-    ca <-  a
-    binOp Add ca b
-
-
-instance (AdditiveBasisConstraints c s Float) =>
-         AdditiveBasis c s (Computation c Float (D c s Float)) (Computation c Float (D c s Float)) Float where
-  (.+.) a b = do
-    ca <- a
-    cb <-  b
-    binOp Add ca cb
 
 
 
 -- | element by element subtraction
 --
 -- > a .-. a = singleton zero
-class 
-      AdditiveGroupBasis c r a b t | a b -> r, a b -> t where
+class ( E.Monad m
+      , IsBinOp c Add r r t
+      , IsMonOp Negate c r t
+      , r ~ BinCalcShape (GetShape a) (GetShape b)
+      , GetShape a ~ MonCalcShape (GetShape a)
+      , r ~ MonCalcShape r
+      , GetShape a ~ GetShape b
+      , AdditiveInvertible m c r b t
+      )=>
+      AdditiveGroupBasis m c r a b t | a b -> r, a b -> t where
   infixl 6 .-.
-  (.-.) :: a -> b -> Computation c t (D c r t)
+  (.-.) :: a -> b -> ComputationT c t m (D c r t)
 
-instance (AdditiveBasisConstraints c s Float) =>
-         AdditiveGroupBasis c s (D c s Float) (D c s Float) Float where
+instance ( E.Monad m
+         , IsBinOp c Add s s t
+         , IsMonOp Negate c s t
+         , s ~ MonCalcShape s
+         ) =>
+         AdditiveGroupBasis m c s (D c s t) (D c s t) t where
   (.-.) a b = do
-    cb <- negate b
+    cb <- monOp Negate b
     binOp Add a cb
 
 
-instance (AdditiveBasisConstraints c s Float) =>
-         AdditiveGroupBasis c s (D c s Float) (Computation c Float  (D c s Float)) Float where
-  (.-.) a b = do
-    cb <- negate b
-    binOp Add a cb
+instance ( E.Monad m
+         , IsBinOp c Add s s t
+         , IsMonOp Negate c s t
+         , s ~ MonCalcShape s
+         , AdditiveInvertible m c s (ComputationT c t m (D c s t)) t
+         ) =>
+         AdditiveGroupBasis m c s (D c s t) (ComputationT c t m (D c s t)) t where
+  (.-.) a cb = do
+    b <- cb
+    nb <- monOp Negate b
+    binOp Add a nb
 
 
-instance (AdditiveBasisConstraints c s Float) =>
-         AdditiveGroupBasis c s (Computation c Float  (D c s Float)) (D c s Float)  Float where
-  (.-.) a b = do
-    ca <-  a
-    cb <- negate b
-    binOp Add ca cb
-
-
-instance (AdditiveBasisConstraints c s Float) =>
-         AdditiveGroupBasis c s (Computation c Float (D c s Float)) (Computation c Float (D c s Float)) Float where
+instance ( E.Monad m
+         , IsBinOp c Add s s t
+         , IsMonOp Negate c s t
+         , s ~ MonCalcShape s
+         , AdditiveBasis m c s (D c s t) ((ComputationT c t m (D c s t))) t
+         , AdditiveBasis m c s ((ComputationT c t m (D c s t))) (D c s t) t
+         ) =>
+         AdditiveGroupBasis m c s (ComputationT c t m (D c s t)) (D c s t) t where
   (.-.) a b = do
     ca <- a
-    cb <-  negate b
+    cb <- monOp Negate b
     binOp Add ca cb
 
 
-instance (AdditiveBasisConstraints c s Double) =>
-         AdditiveGroupBasis c s (D c s Double) (D c s Double) Double where
-  (.-.) a b = do
-    cb <- negate b
-    binOp Add a cb
-
-
-instance (AdditiveBasisConstraints c s Double) =>
-         AdditiveGroupBasis c s (D c s Double) (Computation c Double  (D c s Double)) Double where
-  (.-.) a b = do
-    cb <- negate b
-    binOp Add a cb
-
-
-instance (AdditiveBasisConstraints c s Double) =>
-         AdditiveGroupBasis c s (Computation c Double  (D c s Double)) (D c s Double)  Double where
-  (.-.) a b = do
-    ca <-  a
-    cb <- negate b
-    binOp Add ca cb
-
-
-instance (AdditiveBasisConstraints c s Double) =>
-         AdditiveGroupBasis c s (Computation c Double (D c s Double)) (Computation c Double (D c s Double)) Double where
-  (.-.) a b = do
+instance ( E.Monad m
+         , IsBinOp c Add s s t
+         , IsMonOp Negate c s t
+         , s ~ MonCalcShape s
+         , AdditiveInvertible m c s (ComputationT c t m (D c s t)) t
+         , AdditiveBasis m c s (D c s t) ((ComputationT c t m (D c s t))) t
+         , AdditiveBasis m c s ((ComputationT c t m (D c s t))) (D c s t) t
+         ) =>
+         AdditiveGroupBasis m c s (ComputationT c t m (D c s t)) (ComputationT c t m (D c s t)) t where
+  (.-.) a cb = do
     ca <- a
-    cb <-  negate b
-    binOp Add ca cb
+    b <- cb
+    nb <- monOp Negate b
+    binOp Add ca nb

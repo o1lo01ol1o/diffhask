@@ -7,10 +7,13 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE NoImplicitPrelude     #-}
 {-# LANGUAGE PolyKinds             #-}
+{-# LANGUAGE Rank2Types            #-}
 {-# LANGUAGE ScopedTypeVariables   #-}
-{-# LANGUAGE Rank2Types          #-}
+{-# LANGUAGE TypeApplications      #-}
 {-# LANGUAGE TypeFamilies          #-}
+{-# LANGUAGE TypeOperators         #-}
 {-# LANGUAGE UndecidableInstances  #-}
+
 
 module Core
     ( module Core
@@ -18,25 +21,51 @@ module Core
 
 import           Control.Monad.State.Strict (State, evalState, get, gets,
                                              modify, put, runState, (>=>))
+import           Data.Constraint
 import qualified Data.Map                   as M (Map, empty, insert, lookup,
                                                   update, updateLookupWithKey)
+import           Data.Unique
+import           GHC.Err
+import           GHC.Exts
 import           Internal.Internal          hiding (Differentiable (..))
 import           Internal.NumHask.Prelude   hiding (State, diff, evalState,
                                              runState)
 import           Lens.Micro                 ((%~), (&), (.~), (^.))
+import qualified Numeric.Dimensions         as Dim
+import qualified Numeric.Dimensions.Dim     as Dim
+import qualified NumHask.Array              as A
+import qualified NumHask.Prelude            as P
 import           Prelude                    (error)
-import qualified NumHask.Prelude                  as P
-import Data.Unique
+import           Unsafe.Coerce              (unsafeCoerce)
 
-zero :: (P.AdditiveUnital a, Show a) => D s r a
+zero :: (P.AdditiveUnital a, Operable s '[] a) => D s '[] a
 zero = D P.zero
-one ::(P.MultiplicativeUnital a, Show a) => D s r a
+one ::(P.MultiplicativeUnital a, Operable s '[] a) => D s '[] a
 one = D P.one
 
+zeros' ::
+     (Operable c ds a) => A.Array c ds a
+zeros' = A.Array $ A.generate i (const P.zero)
+  where
+    i = Dim.dimVal (P.undefined :: (Dim.Dim ds))
+
+
+ones' ::
+     (Operable c ds a) => A.Array c ds a
+ones' = A.Array $ A.generate i (const P.one)
+  where
+    i = Dim.dimVal (P.undefined :: (Dim.Dim ds))
+
+zeros :: (Operable s r a) => D s r a
+zeros = Dm $ zeros'
+
+ones :: (Operable s r a) => D s r a
+ones = Dm $ ones'
+
 -- Get Tangent
-t :: forall s r a.
+t :: forall s r a m. (P.AdditiveUnital a, P.Monad m) =>
   D s r a
-  -> Computation s a (Tangent s r a)
+  -> ComputationT s a m (Tangent s r a)
 t =
   \case
     D _ -> pure (zero :: (Tangent s r a))
@@ -48,68 +77,106 @@ initComp :: forall a r. (P.Fractional a) => ComputationState r a
 initComp = ComputationState (Tag 0) (UID 0) M.empty M.empty (1e-6 :: a) (P.sum $ P.replicate 1000 1)
 
 
-mkForward :: () => Tag -> Tangent s r a -> Primal s r a  -> D s r a
+mkForward :: (Operable s r a) => Tag -> Tangent s r a -> Primal s r a  -> D s r a
 mkForward i tg d  = DF d tg i
 
 
-mkReverse :: ( Trace s Noop r a) => Tag -> D s r a -> Computation s a (D s r a)
+mkReverse :: ( Trace s Noop r a, P.Monad m) => Tag -> D s r a -> ComputationT s a m (D s r a)
 mkReverse i d = r d (N Noop) i
 
-instance Trace s Noop  r a where
+instance (Operable s r a) => Trace s Noop  r a where
   pushAlg _ _ = pure []
   resetAlg _ = pure []
 
-addDeltas :: 
-     D s r a
-  -> D s rr a
-  -> Computation s a (D s rrr a)
-addDeltas a b =
-  case (a, b) of
-    (D xa, D xb)   -> a .+. b
-    (Dm ma, D xb)  -> a .+ b
-    (D xa, Dm mb)  -> a +. b
-    (Dm ma, Dm mb) -> a .+. b -- can I just just use binOp Add a b and define the instance to be on the correct combination of dimensions?
+addDeltas' ::
+     ( P.Monad m
+     --, BinBaseOp Add ar br a
+     --, BinOp s Add ar br a
+     , DfBin s Add ar br a
+     , DfDaBin s Add ar br a
+     --, Operable s ar a
+     --, Operable s br a
+     --, Operable s (BinCalcShape ar br) a
+     )
+  => D s ar a
+  -> D s br a
+  -> ComputationT s a m (D s (ScalarShapeAlg ar br) a)
+addDeltas' a b = binOp Add a b
+  -- case (a, b) of
+  --   (D xa :: D s ar a, D xb :: D s br a) -> binOp Add (D xa) (D xb)
+  --   (Dm ma :: D s ar a, D xb :: D s br a) ->
+  --     case checkTensorScalar (Dim.dim @br) (Dim.dim @ar) of
+  --       GT ->  binOp Add (Dm ma) (D xb)
+  --       _ ->
+  --         GHC.Err.error
+  --           "Expected tensor x scalar addition but dimension types were in contradication! Please report this as a bug in diffhask!"
+  --   (D xa :: D s ar a, Dm mb :: D s br a) ->
+  --     case checkScalarTensor (Dim.dim @br) (Dim.dim @ar) of
+  --       LT -> binOp Add (D xa) (Dm mb)
+  --       _ ->
+  --         GHC.Err.error
+  --           "Expected scalar x tensor addition but dimension types were in contradication! Please report this as a bug in diffhask!"
+  --   (Dm ma :: D s ar a, Dm mb :: D s br a) ->
+  --     case checkSame (Dim.dim @br) (Dim.dim @ar) of
+  --       Just Dim.Evidence -> binOp Add (Dm ma) (Dm mb)
+  --       Nothing ->
+  --         GHC.Err.error
+  --           "Dimensions of arguments to binOp should have been equal: Please report this as a bug in diffhask."
+  -- where
+  --   checkSame :: Dim.Dim ar -> Dim.Dim br -> Maybe (Dim.Evidence (ar ~ br))
+  --   checkSame = Dim.sameDim
+  --   checkTensorScalar :: Dim.Dim ar -> Dim.Dim br -> Ordering
+  --   checkTensorScalar = Dim.compareDim
+  --   checkScalarTensor = checkTensorScalar
 
-applyDelta :: UID
-  -> D s r a
-  -> Maybe (Computation s a (D s rr a))
+handleAnyD ::  SomeD c a -> (forall r. Operable c r a => D c r a -> rv) -> rv
+handleAnyD =
+  \case
+    SomeD v -> flip ($) v
+
+
+-- unsafeAddDeltas ::
+--      (P.Monad m, Operable s r a)
+--   => SomeD s a
+--   -> SomeD s a
+--   -> ComputationT s a m (D s r a)
+-- unsafeAddDeltas sa sb = -- P.undefined
+--   case (sa, sb) of
+--     (SomeD (a :: D s ar a), SomeD (b :: D s br a)) -> do
+--       r <- addDeltas' a b
+--       pure r -- (unsafeCoerce r :: D s r a)
+
+addDeltas ::
+     (P.Monad m, WrappedOperable s a)
+  => SomeD s a
+  -> SomeD s a
+  -> ComputationT s a m (SomeD s a)
+addDeltas sa sb = P.undefined
+  -- case (sa, sb) of
+  --   (SomeD (a :: D s ar a), SomeD (b :: D s br a)) -> do
+  --     r <- addDeltas' a b
+  --     pure $ SomeD r 
+
+
+applyDelta ::  (WrappedOperable s a, P.Monad m, P.MonadState (ComputationState s a) Maybe) => UID
+  ->  SomeD s a
+  ->  Maybe (ComputationT s a m (SomeD s a))
 applyDelta uniq dlta = do
   st <- get
   let adjs = st ^. adjoints
   case M.lookup uniq adjs of
-    Just (SomeD v) -> Just $ do
-      e <- dlta
-      r <- addDeltas v e
-      modify (& adjoints .~ M.update (const . Just . SomeD $ r) uniq adjs)
-      return r
+    Just v  -> Just (addIt adjs v)
     Nothing -> Nothing
-  -- st <- cGet
-  -- let adjs = st ^. adjoints
-  -- let km = st ^. uidKeyMap
-  -- case M.lookup uniq km of
-  --   Just (sk) ->
-  --     case sk of
-  --       (SomeKey (k :: HM.HKey s (D s rk a))) ->
-  --         case HM.lookup k adjs of
-  --           Just (v :: (D s rk a)) -> do
-  --             (r ::  (D s rd a)) <- addDeltas v dlta
-  --             nk <- HM.getKey
-  --             lift $
-  --               modify
-  --                 (\st ->
-  --                    st & adjoints .~ HM.update (const . Just $ r) nk adjs &
-  --                    uidKeyMap %~
-  --                    (M.insert uniq (SomeKey nk)))
-  --             pure r
-  --           _ -> error "Couldn't find HKey in adjoints!"
-  --   _ -> error $ "Couldn't find HKey for id " ++ show uniq
- 
+  where
+    addIt adjs v = do
+      r <- addDeltas v dlta
+      modify (& adjoints .~ M.update (const . Just $ r) uniq adjs)
+      pure r
 
-decrementFanout :: UID -> Fanouts s a -> (Maybe Tag, Fanouts s a)
-decrementFanout =
-  M.updateLookupWithKey (\_ (Tag v) -> Just . Tag $ v P.- 1)
+decrementFanout :: UID -> Fanouts -> (Maybe Tag, Fanouts)
+decrementFanout = M.updateLookupWithKey (\_ (Tag v) -> Just . Tag $ v P.- 1)
 
-incrementFanout :: UID -> Computation s a Tag
+incrementFanout :: (P.Monad m) =>UID -> ComputationT s a m Tag
 incrementFanout u = do
   st <- get
   let (mf, a) =
@@ -118,28 +185,26 @@ incrementFanout u = do
   (case mf of
       Nothing -> do
         put (st & fanouts %~ M.insert u (Tag 1))
-        return $ Tag 1
+        pure $ Tag 1
       Just f -> do
         put (st & fanouts %~ const a)
-        return f)
+        pure f)
 
-zeroAdj :: -- forall r s a. (AdditiveUnital (D s r a) r a)
-  -- =>
-  UID
-  -> Computation s a ()
+zeroAdj :: (WrappedOperable s a, P.Monad m) => UID -> ComputationT s a m ()
 zeroAdj uniq =
   modify (& adjoints %~ M.insert uniq (SomeD zero))
 
-reset :: [D s r a] -> Computation s a ()
+reset ::
+     (WrappedOperable s a, P.Monad m) => [SomeD s a] -> ComputationT s a m ()
 reset l =
   case l of
-    [] -> return ()
+    [] -> pure ()
     (da:xs) ->
       case da of
-        DR _ o _ uniq -> do
+        (SomeD (DR _ o _ uniq)) -> do
           fanout <- incrementFanout uniq
-          if fanout == Tag 1 then
-            do
+          if fanout == Tag 1
+            then do
               zeroAdj uniq
               x <- resetAlg o
               reset $ x `mappend` xs -- verify this
@@ -148,114 +213,163 @@ reset l =
         _ -> reset xs
 
 -- recursively pushes nodes onto the reverse mode stack and composes partials at node
-push :: [(D s r a, D s r a)]
-  -> Computation s a ()
+push :: (P.Monad m, WrappedOperable s a,  P.MonadState (ComputationState s a) Maybe) => [(SomeD s a, SomeD s a)]
+  -> ComputationT s a m ()
 push l =
   case l of
-    [] -> return ()
+    [] -> pure ()
     ((dl, da):xs) ->
       case da of
-        DR _ o _ uniq -> do
+        (SomeD (DR _ o _ uniq)) -> do
           let mv = applyDelta uniq dl
           case mv of
-            Just cdA -> do
-              dA <- cdA
-              nst1 <- get
-              let (Just fn, aa) = decrementFanout uniq (nst1 ^. fanouts)
-              put (nst1 & fanouts .~ aa)
-              if fn == Tag 0 then
-                do
-                  pd <- pushAlg o dA
-                  push $ pd `mappend` xs
-                else push xs
+            Just (cdA) -> do
+              sdA <- cdA
+              handleAnyD sdA $ \dA -> getAndDec uniq o dA xs
             Nothing -> error "key not found in adjoints!"
         _ -> push xs
+  where
+    getAndDec ::
+         ( P.MonadState (ComputationState s a) Maybe
+         , Operable s r a
+         , WrappedOperable s a
+         , P.Monad m
+         , Trace s op r a
+         )
+      => UID
+      -> TraceStack s op r a
+      -> D s r a
+      -> [(SomeD s a, SomeD s a)]
+      -> ComputationT s a m ()
+    getAndDec uniq o dA xs = do
+      nst1 <- get
+      let (Just fn, aa) = decrementFanout uniq (nst1 ^. fanouts)
+      put (nst1 & fanouts .~ aa)
+      if fn == Tag 0
+        then pushit o dA xs
+        else push xs
+    pushit ::
+         ( P.MonadState (ComputationState s a) Maybe
+         , Operable s r a
+         , WrappedOperable s a
+         , P.Monad m
+         , Trace s op r a
+         )
+      => TraceStack s op r a
+      -> D s r a
+      -> [(SomeD s a, SomeD s a)]
+      -> ComputationT s a m ()
+    pushit o dA xs = do
+      pd <- pushAlg o dA
+      push $ pd `mappend` xs
+       
 
 reverseReset ::
-     D s r a
-  -> Computation s a ()
+     ( WrappedOperable s a
+     , P.Monad m
+     )
+  => SomeD s a
+  -> ComputationT s a m ()
 reverseReset d = do
   modify (& fanouts .~ M.empty )
   reset [ d]
 
 reverseProp ::
-     D s r a
-  -> D s r a
-  -> Computation s a ()
+     ( WrappedOperable s a
+     , P.Monad m
+     , P.MonadState (ComputationState s a) Maybe
+     )
+  => SomeD s a
+  -> SomeD s a
+  -> ComputationT s a m ()
 reverseProp  v d = do
   reverseReset  d
-  push [( v,  d)]
+  push [(  v,  d)]
 
 {-# INLINE primalTanget #-}
-primalTanget ::
+primalTanget :: (P.Monad m, P.AdditiveUnital a) =>
      D s r a
-  -> Computation s a (D s r a, Tangent s r a)
+  -> ComputationT s a m (D s r a, Tangent s r a)
 primalTanget d = do
   ct <- t d
   pure (p d, ct)
 
-adjoint :: 
+adjoint :: (Operable s r a, P.Monad m) =>
       D s r a
-  -> Computation s a (D s rr a)
+  -> ComputationT s a m (SomeD s a)
 adjoint d =
   case d of
     DR _ _ _ uniq -> do
       ma <- gets (\st -> M.lookup uniq (st ^. adjoints))
       case ma of
-        Just (SomeD a)  -> return a
+        Just a  -> pure a
         Nothing -> error "Adjoint not in map!"
     DF{} -> error "Cannot get adjoint value of DF. Use makeReverse on this node when composing the computation."
-    D _ -> pure zero
+    D _ -> pure $ SomeD zero
 
 
 runComputation :: () => State s a -> s -> (a, s)
 runComputation = runState
 
-compute :: (P.RealFrac a) => Computation s a (b) -> b
-compute f = evalState f initComp
+computeT ::
+     (Monad m, Fractional a1) => StateT (ComputationState r a1) m a2 -> m a2
+computeT f = evalStateT f initComp
+
+-- compute :: (P.RealFrac a) => ComputationT s a m (b) -> b
+-- compute f = evalState f initComp
 
 {-# INLINE computeAdjoints' #-}
 computeAdjoints' ::
-     D s r a
-  -> Computation s a ()
+     forall s r a m.
+     (Operable s r a, P.Monad m, P.MonadState (ComputationState s a) Maybe)
+  => D s r a
+  -> ComputationT s a m ()
 computeAdjoints' d = do
   modify (& adjoints .~ M.empty)
-  o <- pure (one :: D s r a)
-  reverseProp o d
+  o <- pure (ones :: D s r a)
+  reverseProp (SomeD o) (SomeD d)
 
 {-# INLINE computeAdjoints #-}
 computeAdjoints ::
-     D s r a
-  -> Computation s a (Adjoints s a)
+     ( P.Monad m
+     , Operable s r a
+     , Show (Item (s a))
+     , IsList (s a)
+     , P.MonadState (ComputationState s a) Maybe
+     , P.MultiplicativeUnital a
+     )
+  => D s r a
+  -> ComputationT s a m (Adjoints s a)
 computeAdjoints d = do
   computeAdjoints' d
   st <- get
-  return $ st ^. adjoints
+  pure $ st ^. adjoints
 {-# INLINE diff' #-}
 
-diff' :: (D s r a -> Computation s a (D s r a))
+diff' ::
+     (P.MultiplicativeUnital a, P.Monad m, Operable s r a)
+  => (D s r a -> ComputationT s a m (D s r a))
   -> D s r a
-  -> Computation s a (D s r a, Tangent s r a)
+  -> ComputationT s a m (D s r a, Tangent s r a)
 diff' f x = do
   n <- getNextTag
-  o <- pure (one :: D s r a)
-  fout <- f $ mkForward n o x
+  fout <- f $ mkForward n ones x
   primalTanget fout
 {-# INLINE diff #-}
 
-diff ::
-     (D s r a -> Computation s a (D s r a))
+diff :: (P.MultiplicativeUnital a, P.Monad m, Operable s r a) =>
+     (D s r a -> ComputationT s a m (D s r a))
   -> D s r a
-  -> Computation s a (Tangent s r a)
+  -> ComputationT s a m (Tangent s r a)
 diff f x =
   snd <$> diff' f x
 
 {-# INLINE diffn #-}
-diffn ::
+diffn :: (P.MultiplicativeUnital a, P.Monad m, Operable s r a) =>
      Int
-  -> (D s r a -> Computation s a (D s r a))
+  -> (D s r a -> ComputationT s a m (D s r a))
   -> D s r a
-  -> Computation s a (Tangent s r a)
+  -> ComputationT s a m (Tangent s r a)
 diffn n f x =
   if n < 0
     then error "Cannot get the nth derivitive when n is negative!"
@@ -263,63 +377,63 @@ diffn n f x =
            then f x
            else go n f x
   where
-    go ::
+    go :: (P.MultiplicativeUnital a, P.Monad m, Operable s r a) =>
         Int
-      -> (D s r a -> Computation s a (D s r a))
+      -> (D s r a -> ComputationT s a m (D s r a))
       -> D s r a
-      -> Computation s a (Tangent s r a)
+      -> ComputationT s a m (Tangent s r a)
     go n f =
       case n of
         0 -> diff f
         _ -> go (n P.- 1) f >=> diff f
 
 {-# INLINE diffn' #-}
-diffn' ::
+diffn' :: (P.MultiplicativeUnital a, P.Monad m, Operable s r a) =>
      Int
-  -> (D s r a -> Computation s a (D s r a))
+  -> (D s r a -> ComputationT s a m (D s r a))
   -> D s r a
-  -> Computation s a (D s r a, (Tangent s r a))
+  -> ComputationT s a m (D s r a, (Tangent s r a))
 diffn' n f x = do
   it <- f x
   again <- diffn n f x
-  return (it, again)
+  pure (it, again)
 
 {-# INLINE grad' #-}
-grad' ::
-     (D s r a -> Computation s a (D s r a))
+grad' :: (P.MultiplicativeUnital a, P.Monad m, Operable s r a, P.MonadState (ComputationState s a) Maybe) =>
+     (D s r a -> ComputationT s a m (D s r a))
   -> D s r a
-  -> Computation s a (D s r a, (D s r a))
+  -> ComputationT s a m (D s r a, (SomeD s a))
 grad' f x = do
   ntg <- getNextTag
   xa <- mkReverse ntg x
   z <- f xa
   computeAdjoints' z
   adj <- adjoint z
-  return (p z, adj)
+  pure (p z, adj)
 
 {-# INLINE grad #-}
-grad ::
-      (D s r a -> Computation s a (D s r a))
+grad :: (P.MultiplicativeUnital a, P.Monad m, Operable s r a, P.MonadState (ComputationState s a) Maybe) =>
+      (D s r a -> ComputationT s a m (D s r a))
   -> D s r a
-  -> Computation s a (D s r a)
+  -> ComputationT s a m (SomeD s a)
 grad f x = do
   (_, g)<- grad' f x
-  return g
+  pure g
 
 -- Original value and Jacobian product of `f`, at point `x`, along `v`. Forward AD.
-jacobian' ::
-     (D s r a -> Computation s a (D s r a))
+jacobian' :: (P.MultiplicativeUnital a, P.Monad m, Operable s r a) =>
+     (D s r a -> ComputationT s a m (D s r a))
   -> Tangent s r a
   -> Primal s r a
-  -> Computation s a (D s r a, Tangent s r a)
+  -> ComputationT s a m (D s r a, Tangent s r a)
 jacobian' f x v = do
   ntg <- getNextTag
   fout <- f $ mkForward ntg v x
   primalTanget fout
 
-jacobian ::
-      (D s r a -> Computation s a (D s r a))
+jacobian :: (P.MultiplicativeUnital a, P.Monad m, Operable s r a) =>
+      (D s r a -> ComputationT s a m (D s r a))
   -> Tangent s r a
   -> Primal s r a
-  -> Computation s a (Tangent s r a)
+  -> ComputationT s a m (Tangent s r a)
 jacobian f x v = snd <$> jacobian' f x v
