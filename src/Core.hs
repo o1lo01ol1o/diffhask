@@ -90,77 +90,74 @@ instance (Operable s r a) => Trace s Noop  r a where
 
 addDeltas' ::
      ( P.Monad m
-     --, BinBaseOp Add ar br a
-     --, BinOp s Add ar br a
-     , DfBin s Add ar br a
-     , DfDaBin s Add ar br a
-     --, Operable s ar a
-     --, Operable s br a
-     --, Operable s (BinCalcShape ar br) a
      )
   => D s ar a
   -> D s br a
-  -> ComputationT s a m (D s (ScalarShapeAlg ar br) a)
-addDeltas' a b = binOp Add a b
-  -- case (a, b) of
-  --   (D xa :: D s ar a, D xb :: D s br a) -> binOp Add (D xa) (D xb)
-  --   (Dm ma :: D s ar a, D xb :: D s br a) ->
-  --     case checkTensorScalar (Dim.dim @br) (Dim.dim @ar) of
-  --       GT ->  binOp Add (Dm ma) (D xb)
-  --       _ ->
-  --         GHC.Err.error
-  --           "Expected tensor x scalar addition but dimension types were in contradication! Please report this as a bug in diffhask!"
-  --   (D xa :: D s ar a, Dm mb :: D s br a) ->
-  --     case checkScalarTensor (Dim.dim @br) (Dim.dim @ar) of
-  --       LT -> binOp Add (D xa) (Dm mb)
-  --       _ ->
-  --         GHC.Err.error
-  --           "Expected scalar x tensor addition but dimension types were in contradication! Please report this as a bug in diffhask!"
-  --   (Dm ma :: D s ar a, Dm mb :: D s br a) ->
-  --     case checkSame (Dim.dim @br) (Dim.dim @ar) of
-  --       Just Dim.Evidence -> binOp Add (Dm ma) (Dm mb)
-  --       Nothing ->
-  --         GHC.Err.error
-  --           "Dimensions of arguments to binOp should have been equal: Please report this as a bug in diffhask."
-  -- where
-  --   checkSame :: Dim.Dim ar -> Dim.Dim br -> Maybe (Dim.Evidence (ar ~ br))
-  --   checkSame = Dim.sameDim
-  --   checkTensorScalar :: Dim.Dim ar -> Dim.Dim br -> Ordering
-  --   checkTensorScalar = Dim.compareDim
-  --   checkScalarTensor = checkTensorScalar
+  -> ComputationT s a m (D s (BinCalcShape ar br) a)
+addDeltas' a b =
+  case (a, b) of
+    (D xa :: D s ar a, D xb :: D s br a) -> a + b
+    (Dm ma :: D s ar a, D xb :: D s br a) ->
+      case checkTensorScalar (Dim.dim @br) (Dim.dim @ar) of
+        GT -> a .+ b
+        _ ->
+          GHC.Err.error
+            "Expected tensor x scalar addition but dimension types were in contradication! Please report this as a bug in diffhask!"
+    (D xa :: D s ar a, Dm mb :: D s br a) ->
+      case checkScalarTensor (Dim.dim @br) (Dim.dim @ar) of
+        LT -> a +. b
+        _ ->
+          GHC.Err.error
+            "Expected scalar x tensor addition but dimension types were in contradication! Please report this as a bug in diffhask!"
+    (Dm ma :: D s ar a, Dm mb :: D s br a) ->
+      case checkSame (Dim.dim @br) (Dim.dim @ar) of
+        Just Dim.Evidence -> a .+. b
+        Nothing ->
+          GHC.Err.error
+            "Dimensions of arguments to binOp should have been equal: Please report this as a bug in diffhask."
+  where
+    checkSame :: Dim.Dim ar -> Dim.Dim br -> Maybe (Dim.Evidence (ar ~ br))
+    checkSame = Dim.sameDim
+    checkTensorScalar :: Dim.Dim ar -> Dim.Dim br -> Ordering
+    checkTensorScalar = Dim.compareDim
+    checkScalarTensor = checkTensorScalar
 
 handleAnyD ::  SomeD c a -> (forall r. Operable c r a => D c r a -> rv) -> rv
 handleAnyD =
   \case
     SomeD v -> flip ($) v
 
-
--- unsafeAddDeltas ::
---      (P.Monad m, Operable s r a)
---   => SomeD s a
---   -> SomeD s a
---   -> ComputationT s a m (D s r a)
--- unsafeAddDeltas sa sb = -- P.undefined
---   case (sa, sb) of
---     (SomeD (a :: D s ar a), SomeD (b :: D s br a)) -> do
---       r <- addDeltas' a b
---       pure r -- (unsafeCoerce r :: D s r a)
-
-addDeltas ::
-     (P.Monad m, WrappedOperable s a)
+unsafeAddDeltas ::
+     (P.Monad m, Operable s r a)
   => SomeD s a
   -> SomeD s a
-  -> ComputationT s a m (SomeD s a)
-addDeltas sa sb = P.undefined
+  -> ComputationT s a m (D s r a)
+unsafeAddDeltas sa sb = 
+  case (sa, sb) of
+    (SomeD (a :: D s ar a), SomeD (b :: D s br a)) -> do
+      r <- addDeltas' a b
+      pure (unsafeCoerce r :: D s r a)
+
+-- addDeltas ::
+--      (P.Monad m, WrappedOperable s a)
+--   => SomeD s a
+--   -> SomeD s a
+--   -> ComputationT s a m (SomeD s a)
+-- addDeltas sa sb =
+--   handleAnyD sa $ \ (ca :: D s ar a) ->
+--   handleAnyD sb $ \ (cb :: D s br a) -> do
+--      r <- addDeltas' ca cb
+--      pure $ SomeD r
+  
   -- case (sa, sb) of
   --   (SomeD (a :: D s ar a), SomeD (b :: D s br a)) -> do
   --     r <- addDeltas' a b
-  --     pure $ SomeD r 
+  --     pure $ SomeD r
 
 
-applyDelta ::  (WrappedOperable s a, P.Monad m, P.MonadState (ComputationState s a) Maybe) => UID
+applyDelta ::  (Operable s r a, P.Monad m, P.MonadState (ComputationState s a) Maybe) => UID
   ->  SomeD s a
-  ->  Maybe (ComputationT s a m (SomeD s a))
+  ->  Maybe (ComputationT s a m (D s r a))
 applyDelta uniq dlta = do
   st <- get
   let adjs = st ^. adjoints
@@ -169,8 +166,8 @@ applyDelta uniq dlta = do
     Nothing -> Nothing
   where
     addIt adjs v = do
-      r <- addDeltas v dlta
-      modify (& adjoints .~ M.update (const . Just $ r) uniq adjs)
+      r <- unsafeAddDeltas v dlta -- FIXME: It should be possible to return SomeD without the coercion but at present I can't make GHC happy.
+      modify (& adjoints .~ M.update (const . Just . SomeD $ r) uniq adjs)
       pure r
 
 decrementFanout :: UID -> Fanouts -> (Maybe Tag, Fanouts)
@@ -212,6 +209,59 @@ reset l =
           reset xs
         _ -> reset xs
 
+applyAndPush :: forall s r a m op.
+     ( P.MonadState (ComputationState s a) Maybe
+     , Operable s r a
+     , WrappedOperable s a
+     , P.Monad m
+     , Trace s op r a
+     )
+  => UID
+  -> TraceStack s op r a
+  -> SomeD s a
+  -> [(SomeD s a, SomeD s a)]
+  -> ComputationT s a m ()
+applyAndPush uniq o dl xs = do
+  let mv = applyDelta uniq dl
+  case mv of
+    Just (cdA) -> do
+      dA <- cdA
+      getAndDec uniq o dA xs
+    Nothing -> error "key not found in adjoints!"
+getAndDec ::forall s r a m op.
+     ( P.MonadState (ComputationState s a) Maybe
+     , Operable s r a
+     , WrappedOperable s a
+     , P.Monad m
+     , Trace s op r a
+     )
+  => UID
+  -> TraceStack s op r a
+  -> D s r a
+  -> [(SomeD s a, SomeD s a)]
+  -> ComputationT s a m ()
+getAndDec uniq o dA xs = do
+  nst1 <- get
+  let (Just fn, aa) = decrementFanout uniq (nst1 ^. fanouts)
+  put (nst1 & fanouts .~ aa)
+  if fn == Tag 0
+    then pushit o dA xs
+    else push xs
+pushit ::
+     ( P.MonadState (ComputationState s a) Maybe
+     , Operable s r a
+     , WrappedOperable s a
+     , P.Monad m
+     , Trace s op r a
+     )
+  => TraceStack s op r a
+  -> D s r a
+  -> [(SomeD s a, SomeD s a)]
+  -> ComputationT s a m ()
+pushit o dA xs = do
+  pd <- pushAlg o dA
+  push $ pd `mappend` xs
+
 -- recursively pushes nodes onto the reverse mode stack and composes partials at node
 push :: (P.Monad m, WrappedOperable s a,  P.MonadState (ComputationState s a) Maybe) => [(SomeD s a, SomeD s a)]
   -> ComputationT s a m ()
@@ -220,49 +270,11 @@ push l =
     [] -> pure ()
     ((dl, da):xs) ->
       case da of
-        (SomeD (DR _ o _ uniq)) -> do
-          let mv = applyDelta uniq dl
-          case mv of
-            Just (cdA) -> do
-              sdA <- cdA
-              handleAnyD sdA $ \dA -> getAndDec uniq o dA xs
-            Nothing -> error "key not found in adjoints!"
+        (SomeD (DR _ o _ uniq)) ->
+          handleAnyD da $ \(DR _ o _ uniq) -> applyAndPush uniq o dl xs
         _ -> push xs
-  where
-    getAndDec ::
-         ( P.MonadState (ComputationState s a) Maybe
-         , Operable s r a
-         , WrappedOperable s a
-         , P.Monad m
-         , Trace s op r a
-         )
-      => UID
-      -> TraceStack s op r a
-      -> D s r a
-      -> [(SomeD s a, SomeD s a)]
-      -> ComputationT s a m ()
-    getAndDec uniq o dA xs = do
-      nst1 <- get
-      let (Just fn, aa) = decrementFanout uniq (nst1 ^. fanouts)
-      put (nst1 & fanouts .~ aa)
-      if fn == Tag 0
-        then pushit o dA xs
-        else push xs
-    pushit ::
-         ( P.MonadState (ComputationState s a) Maybe
-         , Operable s r a
-         , WrappedOperable s a
-         , P.Monad m
-         , Trace s op r a
-         )
-      => TraceStack s op r a
-      -> D s r a
-      -> [(SomeD s a, SomeD s a)]
-      -> ComputationT s a m ()
-    pushit o dA xs = do
-      pd <- pushAlg o dA
-      push $ pd `mappend` xs
-       
+
+
 
 reverseReset ::
      ( WrappedOperable s a

@@ -1,18 +1,18 @@
 {-# OPTIONS_GHC -Wall #-}
-{-# LANGUAGE ConstraintKinds        #-}
-{-# LANGUAGE DataKinds              #-}
-{-# LANGUAGE FlexibleContexts       #-}
-{-# LANGUAGE FlexibleInstances      #-}
-{-# LANGUAGE FunctionalDependencies #-}
-{-# LANGUAGE MultiParamTypeClasses  #-}
-{-# LANGUAGE NoImplicitPrelude      #-}
-{-# LANGUAGE OverloadedLists        #-}
-{-# LANGUAGE Rank2Types             #-}
-{-# LANGUAGE TypeFamilies           #-}
-{-# LANGUAGE TypeFamilyDependencies #-}
-{-# LANGUAGE TypeInType             #-}
-{-# LANGUAGE UndecidableInstances   #-}
-{-# LANGUAGE UndecidableSuperClasses   #-}
+{-# LANGUAGE ConstraintKinds         #-}
+{-# LANGUAGE DataKinds               #-}
+{-# LANGUAGE FlexibleContexts        #-}
+{-# LANGUAGE FlexibleInstances       #-}
+{-# LANGUAGE FunctionalDependencies  #-}
+{-# LANGUAGE MultiParamTypeClasses   #-}
+{-# LANGUAGE NoImplicitPrelude       #-}
+{-# LANGUAGE OverloadedLists         #-}
+{-# LANGUAGE Rank2Types              #-}
+{-# LANGUAGE TypeFamilies            #-}
+{-# LANGUAGE TypeFamilyDependencies  #-}
+{-# LANGUAGE TypeInType              #-}
+{-# LANGUAGE UndecidableInstances    #-}
+{-# LANGUAGE UndecidableSuperClasses #-}
 -- | A magma heirarchy for addition. The basic magma structure is repeated and prefixed with 'Additive-'.
 module Internal.NumHask.Algebra.Additive
   ( -- AdditiveMagma(..)
@@ -29,9 +29,11 @@ module Internal.NumHask.Algebra.Additive
   , AdditiveGroupModule(..)
   , AdditiveBasis(..)
   , AdditiveModule(..)
+  , Additive(..)
   , Add(..)
   , Negate(..)
   ) where
+import           Control.Monad      ((>>=))
 import           GHC.Exts
 import           Internal.Internal
 import qualified Numeric.Dimensions as Dim
@@ -40,9 +42,87 @@ import           NumHask.Prelude    (Bool (..), Double, Float, Int, Integer,
                                      Show, pure, ($))
 import qualified NumHask.Prelude    as P
 import qualified NumHask.Prelude    as E
-import Control.Monad ((>>=))
 
 data Negate = Negate deriving Show
+
+
+class (Operable c '[] t, E.Monad m) =>
+      Additive m c a b t | a -> t, b -> t, a b -> t where
+  (+) :: a -> b -> ComputationT c t m (D c '[] t)
+
+instance (Operable c '[] t, E.Monad m) =>
+         Additive m c (D c '[] t) (D c '[] t) t where
+  (+) a b = binOp Add a b
+
+instance (Operable c '[] t, E.Monad m) =>
+         Additive m c (ComputationT c t m (D c '[] t)) (D c '[] t) t where
+  (+) a b = do
+    ca <- a
+    binOp Add ca b
+
+instance (Operable c '[] t, E.Monad m) =>
+         Additive m c (D c '[] t) (ComputationT c t m (D c '[] t)) t where
+  (+) a b = do
+    cb <- b
+    binOp Add a cb
+
+instance (Operable c '[] t, E.Monad m) =>
+         Additive m c (ComputationT c t m (D c '[] t)) (ComputationT c t m (D c '[] t)) t where
+  (+) a b = do
+    ca <- a
+    cb <- b
+    binOp Add ca cb
+
+
+class ( Operable c '[] t
+      , E.Monad m
+      , MonCalcShape '[] ~ '[]
+      , IsMonOp Negate c '[] t
+      ) =>
+      AdditiveGroup m c a b t | a -> t, b -> t, a b -> t where
+  (-) :: a -> b -> ComputationT c t m (D c '[] t)
+
+instance ( Operable c '[] t
+         , E.Monad m
+         , MonCalcShape '[] ~ '[]
+         , IsMonOp Negate c '[] t
+         ) =>
+         AdditiveGroup m c (D c '[] t) (D c '[] t) t where
+  (-) a b = do
+    nb <- negate b
+    binOp Add a nb
+
+instance ( Operable c '[] t
+         , E.Monad m
+         , MonCalcShape '[] ~ '[]
+         , IsMonOp Negate c '[] t
+         ) =>
+         AdditiveGroup m c (ComputationT c t m (D c '[] t)) (D c '[] t) t where
+  (-) a b = do
+    nb <- negate b
+    ca <- a
+    binOp Add ca nb
+
+instance ( Operable c '[] t
+         , E.Monad m
+         , MonCalcShape '[] ~ '[]
+         , IsMonOp Negate c '[] t
+         ) =>
+         AdditiveGroup m c (D c '[] t) (ComputationT c t m (D c '[] t)) t where
+  (-) a b = do
+    cb <- negate b
+    binOp Add a cb
+
+instance ( Operable c '[] t
+         , E.Monad m
+         , MonCalcShape '[] ~ '[]
+         , IsMonOp Negate c '[] t
+         ) =>
+         AdditiveGroup m c (ComputationT c t m (D c '[] t)) (ComputationT c t m (D c '[] t)) t where
+  (-) a b = do
+    ca <- a
+    cb <- negate b
+    binOp Add ca cb
 
 instance (IsMonOp Negate s r a) => MonOp s Negate r a where
   {-# INLINE fd #-}
@@ -51,8 +131,9 @@ instance (IsMonOp Negate s r a) => MonOp s Negate r a where
   df _ _ _ at = monOp Negate at
 
 
-class (E.Monad m, IsMonOp Negate c r t) => AdditiveInvertible m c r a t | a -> t, a -> r  where
-  negate ::a -> ComputationT c t m (D c (MonCalcShape r) t)
+class (E.Monad m, IsMonOp Negate c r t) =>
+      AdditiveInvertible m c r a t | a -> t, a -> r where
+  negate :: a -> ComputationT c t m (D c (MonCalcShape r) t)
 
 
 instance (E.Monad m, IsMonOp Negate c r t) =>
@@ -63,15 +144,10 @@ instance (E.Monad m, IsMonOp Negate c r t) =>
 
 instance (E.Monad m, IsMonOp Negate c s t) =>
          AdditiveInvertible m c s (D c s t) t where
-  negate a= monOp Negate a
+  negate a = monOp Negate a
 
 
--- | Additive Module Laws
---
--- > (a + b) .+ c == a + (b .+ c)
--- > (a + b) .+ c == (a .+ c) + b
--- > a .+ zero == a
--- > a .+ b == b +. a
+
 class (E.Monad m, IsBinOp c Add (GetShape a) (GetShape b) t, GetShape b ~ '[]) =>
       AdditiveModule m c a b t | a -> t, b -> t, a b -> t where
   infixl 6 .+

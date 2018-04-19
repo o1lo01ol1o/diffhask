@@ -18,7 +18,7 @@
 {-# LANGUAGE TypeInType                 #-}
 {-# LANGUAGE TypeApplications                 #-}
 {-# LANGUAGE UndecidableInstances       #-}
-{-# LANGUAGE UndecidableSuperClasses    #-}
+-- {-# LANGUAGE UndecidableSuperClasses    #-}
 module Internal.Internal (module Internal.Internal) where
 import           Control.Monad.State.Strict (State, StateT, evalState, get,
                                              gets, modify, put, runState, (>=>))
@@ -43,12 +43,6 @@ import           Protolude.Error
 
 
 
--- Next strat:
--- Drop all scalar parts of the diffhask hierachy.
--- pass all array ops directly to the array instances of numhask hierarchy
--- For scalar literals / scalar-array ops:
--- define GroupBasis ops for scalar lits and D c r a`s that are then lifted into an Array s [] LitType or packed into a  scalar `D` constructor with unspecialized dimensions and container types.  later will need to hide scalar constructor since we won't have defined scalar ops in the hierarchy.  Means scalar-scalar ops will need to be done on dim '[1] arrays unless we can `index` it back to a scalar ctor . . . but this still won't register as a literal unless we drop the ctor and use a type family to output the result.  Would this break the computation graph or not?  might not since we'd be lifting in and out on either side using the hidden ctor (no unaccounted-for ops could occur in between )
---
 data ComputationState c a = ComputationState
   {
    _nextTag    :: !Tag
@@ -76,7 +70,7 @@ type Operable c r a
      , Show (A.Array c r a)
      , Show (Item (c a))
      , IsList (c a)
-     , Trace c Add r a
+     -- , Trace c Add r a
      , E.Num a)
 
 type WrappedOperable c a
@@ -138,11 +132,12 @@ type Tangent c r a = D c r a
 
 type FptNode c r a = (D c r a, D c r a, D c r a, D c r a) -- nodes needed for a fixpoint evaluation
 
-class (Operable c r a) =>
+class ( Operable c r a
+      ) =>
       Trace c op r a where
   resetAlg :: (Monad m) => TraceStack c op r a -> ComputationT c a m [SomeD c a]
-  resetAlg (U _ a)     = pure [SomeD a]
-  resetAlg (B _ a b)   = pure [SomeD a, SomeD b, SomeD a, SomeD b]
+  resetAlg (U _ a) = pure [SomeD a]
+  resetAlg (B _ a b) = pure [SomeD a, SomeD b, SomeD a, SomeD b]
   resetAlg (IxU _ a _) = pure [SomeD a]
   pushAlg ::
        (Monad m)
@@ -167,9 +162,9 @@ class (P.Additive t, Dim.Dimensions ar) => MonBaseOp op (ar :: [Nat]) t where
 -- To store the adoint we have to keep track of the outputs of an operation shape as well as the expressions that yeild the dual of the input arguments
 data  TraceStack c op r a where
   N :: op -> TraceStack c op r a
-  U :: (MonBaseOp op r a, Operable c r a, Operable c (MonCalcShape r) a) => op -> D c r a -> TraceStack c op (MonCalcShape r) a
+  U :: (MonBaseOp op r a) => op -> D c r a -> TraceStack c op (MonCalcShape r) a
   B
-    :: (BinBaseOp op ar br a, Operable c ar a, Operable c br a)
+    :: (BinBaseOp op ar br a)
     => op
     -> D c ar a
     -> D c br a
@@ -265,18 +260,28 @@ type IsMonOp op c r a = (Operable c r a
       , Trace c op (MonCalcShape r) a
       , Trace c op r a)
 
-class ( IsMonOp op c r a
+class ( Operable c r a
+      , Operable c (MonCalcShape r) a
+      , MonBaseOp op r a
+      , Show op
+      , Trace c op (MonCalcShape r) a
+      , Trace c op r a
       ) =>
       MonOp c op r a where
-  fd :: (ComputationT c a m ~ mm, Monad m) => op -> D c r a -> mm (D c (MonCalcShape r) a)
+  fd ::
+       (ComputationT c a m ~ mm, Monad m)
+    => op
+    -> D c r a
+    -> mm (D c (MonCalcShape r) a)
   df ::
-       ( Monad m)
+       (Monad m)
     => op
     -> D c (MonCalcShape r) a
     -> D c r a
     -> D c r a
     -> ComputationT c a m (D c (MonCalcShape r) a)
-  monOp :: (Monad m) => op -> D c r a -> ComputationT c a m (D c (MonCalcShape r) a)
+  monOp ::
+       (Monad m) => op -> D c r a -> ComputationT c a m (D c (MonCalcShape r) a)
   monOp op a =
     case a of
       D _ -> pure $ baseOpMon op a
@@ -289,41 +294,56 @@ class ( IsMonOp op c r a
         cp <- fd op ap
         r cp (U op a) ai
 
-class (Operable c ar a, Operable c br a) =>
+type APrimal c r a = Primal c r a
+type BPrimal c r a = Primal c r a
+type CPrimal c r a = Primal c r a
+
+type ATangent c r a = Tangent c r a
+type BTangent c r a = Tangent c r a
+
+--FIXME _da and _db classes will also need a typeclass to select the appropriate output shape based on the op.
+class (Operable c ar a, Operable c br a, IsBinOp c op ar br a) =>
       DfDaBin c op ar br a where
   df_da ::
        (Monad m)
     => op
     -> D c br a
-    -> D c (BinCalcShape ar br) a
-    -> D c ar a
-    -> Tangent c ar a
+    -> CPrimal c (BinCalcShape ar br) a
+    -> BPrimal c ar a
+    -> BTangent c ar a
     -> ComputationT c a m (D c (BinCalcShape ar br) a)
 
-class (Operable c ar a, Operable c br a) =>
+
+class (Operable c ar a, Operable c br a, IsBinOp c op ar br a) =>
       DfDbBin c op ar br a where
   df_db ::
        (Monad m)
     => op
     -> D c ar a
-    -> D c (BinCalcShape ar br) a
-    -> D c br a
-    -> Tangent c br a
+    -> CPrimal c (BinCalcShape ar br) a
+    -> APrimal c br a
+    -> ATangent c br a
     -> ComputationT c a m (D c (BinCalcShape ar br) a)
 
-instance (Operable c ar a, Operable c br a) => DfDbBin c Add ar br a where
-  df_db = E.undefined
+instance (Operable c ar a, Operable c br a, IsBinOp c Add ar br a) => DfDbBin c Add ar br a where
+  {-# INLINE df_db #-}
+  df_db _ _ _ _ bt = pure bt
 
-instance (Operable c ar a, Operable c br a) => DfDaBin c Add ar br a where
-  df_da = E.undefined
+
+instance (Operable c ar a, Operable c br a, IsBinOp c Add ar br a) => DfDaBin c Add ar br a where
+  {-# INLINE df_da #-}
+  df_da  _ _ _ _ at = pure at
 
 type IsBinOp c op ar br a
    = ( E.Additive a
-     , DfDaBin c Add ar br a
-     , DfDbBin c Add ar br a
-     , Trace c Add ar a
-     , Trace c Add br a
-     , Trace c Add (BinCalcShape ar br) a)
+     -- , DfDaBin c op ar br a
+     -- , DfDbBin c op ar br a
+     , BinBaseOp op ar br a
+     , Trace c op ar a
+     , Trace c op br a
+     , Trace c op (BinCalcShape ar br) a
+     , Operable c (BinCalcShape ar br) a
+     , Operable c (ScalarShapeAlg ar br) a)
 
 
 instance (IsBinOp c Add ar br a) => BinOp c Add ar br a
@@ -334,7 +354,7 @@ instance (P.Additive t, Dim.Dimensions ar, Dim.Dimensions br) => BinBaseOp Add a
   baseOpBin _ (Dm a) (D b) = Dm $ a P..+ b
   baseOpBin _ (D a) (Dm b) = Dm $ a P.+. b
   baseOpBin _ (Dm a) (Dm b) =
-    case check P.undefined P.undefined of
+    case check (Dim.dim @ar) (Dim.dim @br) of
       Just Dim.Evidence -> Dm $ a P..+. b
       Nothing ->
         GHC.Err.error
@@ -356,7 +376,7 @@ instance ( Operable s ar a
   {-# inline df_dab #-}
   df_dab _ _ _ _ _ at _ bt = binOp Add at bt
 
-class (Operable c ar t, Operable c br t, BinOp c op ar br t) =>
+class (Operable c ar t, Operable c br t) =>
       DfBin c op ar br t where
   fd_bin ::
        (Monad m)
@@ -376,9 +396,9 @@ class (Operable c ar t, Operable c br t, BinOp c op ar br t) =>
     -> (D c br t)
     -> ComputationT c t m (D c (BinCalcShape ar br) t)
 
-class (E.Additive a) =>
-      FfBin op a where
-  ff_bin :: op -> a -> a -> a
+-- class (E.Additive a) =>
+--       FfBin op a where
+--   ff_bin :: op -> a -> a -> a
 
 class ( Show op
       , BinBaseOp op ar br a
