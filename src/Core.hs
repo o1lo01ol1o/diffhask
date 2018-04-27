@@ -62,16 +62,6 @@ zeros = Dm $ zeros'
 ones :: (Operable s r a) => D s r a
 ones = Dm $ ones'
 
--- Get Tangent
-t :: forall s r a m. (P.AdditiveUnital a, P.Monad m) =>
-  D s r a
-  -> ComputationT s a m (Tangent s r a)
-t =
-  \case
-    D _ -> pure (zero :: (Tangent s r a))
-    DF _ at _ -> pure (at :: (Tangent s r a))
-    DR {} -> error "Can't get tangent of a reverse node"
-
 
 initComp :: forall a r. (P.Fractional a) => ComputationState r a
 initComp = ComputationState (Tag 0) (UID 0) M.empty M.empty (1e-6 :: a) (P.sum $ P.replicate 1000 1)
@@ -132,7 +122,7 @@ unsafeAddDeltas ::
   => SomeD s a
   -> SomeD s a
   -> ComputationT s a m (D s r a)
-unsafeAddDeltas sa sb = 
+unsafeAddDeltas sa sb =
   case (sa, sb) of
     (SomeD (a :: D s ar a), SomeD (b :: D s br a)) -> do
       r <- addDeltas' a b
@@ -148,7 +138,7 @@ unsafeAddDeltas sa sb =
 --   handleAnyD sb $ \ (cb :: D s br a) -> do
 --      r <- addDeltas' ca cb
 --      pure $ SomeD r
-  
+
   -- case (sa, sb) of
   --   (SomeD (a :: D s ar a), SomeD (b :: D s br a)) -> do
   --     r <- addDeltas' a b

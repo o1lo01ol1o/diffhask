@@ -9,6 +9,7 @@
 {-# LANGUAGE LambdaCase                 #-}
 {-# LANGUAGE MultiParamTypeClasses      #-}
 {-# LANGUAGE NoImplicitPrelude          #-}
+{-# LANGUAGE NoMonomorphismRestriction          #-}
 {-# LANGUAGE OverloadedLists            #-}
 {-# LANGUAGE PolyKinds                  #-}
 {-# LANGUAGE RankNTypes                 #-}
@@ -63,10 +64,12 @@ data Add = Add deriving Show
 
 type Operable c r a
    = ( E.Additive a
+     , E.Foldable c
      , E.MultiplicativeUnital a
      , Dim.Dimensions r
      , A.Container c
      , Show a
+     , a ~ Item (c a)
      , Show (A.Array c r a)
      , Show (Item (c a))
      , IsList (c a)
@@ -77,6 +80,7 @@ type WrappedOperable c a
    = ( E.Additive a
      , E.MultiplicativeUnital a
      , A.Container c
+     , E.Foldable c
      , Show a
      , Show (Item (c a))
      , IsList (c a)
@@ -107,6 +111,9 @@ getDims :: (Dim.Dimensions r) => D c r a -> Dim.Dim r
 getDims = \case
   (_ :: D c r a) -> Dim.dim @r
 
+
+    
+
 data SomeD c a where
   SomeD :: (Operable c r a) => D c r a -> SomeD c a
 
@@ -132,6 +139,9 @@ type Tangent c r a = D c r a
 
 type FptNode c r a = (D c r a, D c r a, D c r a, D c r a) -- nodes needed for a fixpoint evaluation
 
+dmToDs_ :: D c r a -> [D c '[] a]
+dmToDs_ (Dm (A.Array ar)) = fmap D (P.toList ar)
+
 class ( Operable c r a
       ) =>
       Trace c op r a where
@@ -139,15 +149,19 @@ class ( Operable c r a
   resetAlg (U _ a) = pure [SomeD a]
   resetAlg (B _ a b) = pure [SomeD a, SomeD b, SomeD a, SomeD b]
   resetAlg (IxU _ a _) = pure [SomeD a]
+  resetAlg (MkDm_of_Ds ds) = pure $ fmap SomeD ds 
   pushAlg ::
        (Monad m)
     => TraceStack c op r a
     -> D c r a
     -> ComputationT c a m [(SomeD c a, SomeD c a)] -- (delta, node)
+  pushAlg (MkDm_of_Ds ds) dA = pure $ zipWith (\i d -> (SomeD $ unsafeMkDfromDmAt dA i, SomeD d)) [0..] (dmToDs_ dA) -- TODO: verify the Dm invarient is enforced by the instances.
   {-# MINIMAL (resetAlg, pushAlg) #-}
 
 instance (Operable c r a) => Trace c Add r a where
-  pushAlg = E.undefined
+  pushAlg (B _ a b) dA = pure [( SomeD dA, SomeD a), (SomeD dA, SomeD b), (SomeD dA, SomeD a), (SomeD dA, SomeD b)]
+
+instance (Operable c r a) => Trace c MkDm_of_Ds r a
 
 data Noop = Noop deriving Show
 
@@ -158,7 +172,16 @@ class (P.Additive t, Dim.Dimensions ar, Dim.Dimensions br) => BinBaseOp op (ar :
 class (P.Additive t, Dim.Dimensions ar) => MonBaseOp op (ar :: [Nat]) t where
   type MonCalcShape ar :: [Nat]
   baseOpMon :: op -> (D c ar t) -> (D c (MonCalcShape ar) t)
+  
+data MkDm_of_Ds = MkDm_of_DsCtor deriving Show -- FIXME: this dumb ctor name.
 
+unsafeMkDfromDmAt :: (Show a) => D c r a -> Int -> D c '[] a
+unsafeMkDfromDmAt dm i = case dm of
+  Dm (A.Array m) ->  D $  m `A.idx` i
+  _ -> GHC.Err.error $  "unsafeMkDfromDmAt was called on an edge that was not a Dm! " ++ (show dm)
+
+  
+  
 -- To store the adoint we have to keep track of the outputs of an operation shape as well as the expressions that yeild the dual of the input arguments
 data  TraceStack c op r a where
   N :: op -> TraceStack c op r a
@@ -171,6 +194,7 @@ data  TraceStack c op r a where
     -> TraceStack c op (BinCalcShape ar br) a
   IxU :: op -> D c r a -> [Int] -> TraceStack c op r a
   FxP :: op -> FptNode c r a -> TraceStack c op r a
+  MkDm_of_Ds :: [D c '[] a] -> TraceStack c MkDm_of_Ds r a
 
 instance (Show op,  Show a) => Show (TraceStack c op r a) where
   show (N o) = "N " ++ show o
@@ -239,6 +263,16 @@ pD =
     DF d _ _ -> pD d
     DR d _ _ _ -> pD d
 
+-- Get Tangent
+t :: forall s r a. (P.AdditiveUnital a) =>
+  D s r a
+  -> Tangent s r a
+t =
+  \case
+    D _ ->  (D  zero)
+    DF _ at _ ->  at
+    DR {} -> GHC.Err.error "Can't get tangent of a reverse node"
+    
 instance (Eq a) => Eq (D c r a) where
   d1 == d2 = pD d1 == pD d2
 
@@ -246,12 +280,46 @@ instance (Eq a) => Eq (D c r a) where
 instance (Ord a) => Ord (D c r a) where
   d1 `compare` d2 = pD d1 `compare` pD d2
 
--- toNumeric :: (Item (A.Array c r a) ~ a)=> D c r a -> A.Array c r a
--- toNumeric d =
---   case pD d of
---     D v -> A.singleton v
---     Dm v -> v
+toNumeric :: forall c r a. (Item (A.Array c r a) ~ a)=> D c r a -> A.Array c r a
+toNumeric d =
+  case pD d of
+    D v ->  (A.Array $ A.generate 1 (const v) :: A.Array c '[] a)
+    Dm v -> v
 
+toNumericScalar :: D c '[] a -> a
+toNumericScalar d =
+  case pD d of
+    D v -> v
+    _ -> GHC.Err.error "Impossible! Deepest primal of an argument toNumericScalar was not a scalar!"
+
+
+ofList_ ::
+     forall c r a m.
+     ( Trace c MkDm_of_Ds r a
+     , E.Monad m
+     , Operable c r a
+     , Item (A.Array c r a) ~ Item (c a)
+     )
+  => Proxy r
+  -> [D c '[] a]
+  -> ComputationT c a m (D c r a)
+ofList_ pr l@(a:as) =
+  case a of
+    D _ -> pure . Dm $ fromList sc
+    Dm _ -> pure . Dm $ fromList sc
+    DF _ _ ai -> do
+      cap <- ofList_ pr ap
+      cat <- ofList_ pr at
+      pure $ DF (cap) (cat) ai
+    DR _ _ ai _ -> do
+      ccp <- cp
+      r ccp (MkDm_of_Ds l) ai
+  where
+    sc = map toNumericScalar l :: [a]
+    ap = map p l
+    at = map t l
+    cp = ofList_ pr ap
+      
 type IsMonOp op c r a = (Operable c r a
       , Operable c (MonCalcShape r) a
       , MonBaseOp op r a
@@ -301,9 +369,9 @@ type CPrimal c r a = Primal c r a
 type ATangent c r a = Tangent c r a
 type BTangent c r a = Tangent c r a
 
---FIXME _da and _db classes will also need a typeclass to select the appropriate output shape based on the op.
-class (Operable c ar a, Operable c br a, IsBinOp c op ar br a) =>
+class (Operable c ar a, Operable c br a, IsBinOp c op ar br a, (BinCalcShape ar br) ~ (DfDaShape ar br)) =>
       DfDaBin c op ar br a where
+  type DfDaShape ar br :: [Nat]
   df_da ::
        (Monad m)
     => op
@@ -311,11 +379,19 @@ class (Operable c ar a, Operable c br a, IsBinOp c op ar br a) =>
     -> CPrimal c (BinCalcShape ar br) a
     -> BPrimal c ar a
     -> BTangent c ar a
-    -> ComputationT c a m (D c (BinCalcShape ar br) a)
+    -> ComputationT c a m (D c (DfDaShape ar br) a)
 
 
-class (Operable c ar a, Operable c br a, IsBinOp c op ar br a) =>
+type family IfScalarThenMkTensor' ar br :: [Nat] where
+  IfScalarThenMkTensor' '[] br = br
+  IfScalarThenMkTensor' br br = br
+
+scalarToTensorLike :: (a ~ Item (c a), Foldable c, Operable c t a, Monad m) => D c '[] a -> Proxy t -> ComputationT c a m (D c t a)
+scalarToTensorLike d p = ofList_ p . dmToDs_ $ d
+
+class (Operable c ar a, Operable c br a, IsBinOp c op ar br a, (BinCalcShape ar br) ~ (DfDbShape ar br)) =>
       DfDbBin c op ar br a where
+  type DfDbShape ar br :: [Nat]
   df_db ::
        (Monad m)
     => op
@@ -323,16 +399,43 @@ class (Operable c ar a, Operable c br a, IsBinOp c op ar br a) =>
     -> CPrimal c (BinCalcShape ar br) a
     -> APrimal c br a
     -> ATangent c br a
-    -> ComputationT c a m (D c (BinCalcShape ar br) a)
+    -> ComputationT c a m( D c (DfDbShape ar br) a)
 
-instance (Operable c ar a, Operable c br a, IsBinOp c Add ar br a) => DfDbBin c Add ar br a where
+-- class IfScalarAlg ar br where
+--   type IfScalarShapeAlg ar br :: [Nat]
+  
+--   ifScalarThenElse :: forall c rt rmt a e m. (Operable c rt a, E.Monad m, Operable c rmt a) => Proxy rmt ->  D c rt a -> (D c rt a ->ComputationT c a m( D c (IfScalarShapeAlg rt rmt) a)) ->  (D c rt a -> D c (IfScalarShapeAlg rt rmt) a) -> ComputationT c a m (D c (IfScalarShapeAlg rt rmt) a)
+
+-- instance IfScalarAlg ar br where
+--   type  IfScalarShapeAlg = IfScalarThenMkTensor'
+--   ifScalarThenElse _ d sf f =
+--     case getDims d of
+--       Dim.D -> sf d
+--       _ -> pure $ f d
+
+-- ifScalarThenOfList :: forall c r a rr. (Operable c r a, Operable c rr a) => D c r a ->  (D c r a -> D c rr a) -> D c rr a
+    
+instance (IfScalarThenMkTensor' br ar ~ ScalarShapeAlg ar br, Operable c ar a, Operable c br a, IsBinOp c Add ar br a) => DfDbBin c Add ar br a where
+  type DfDbShape ar br = IfScalarThenMkTensor' br ar
   {-# INLINE df_db #-}
-  df_db _ _ _ _ bt = pure bt
+  df_db _ _ _ _ bt = case getDims bt of
+    Dim.D -> scalarToTensorLike bt (Proxy :: Proxy ar)
+    _ -> case Dim.sameDim (Dim.dim @br) (Dim.dim @ar) of
+      Just Dim.Evidence -> pure bt
+      _ -> GHC.Err.error "Expected tangent value of `bt` to be a scalar or of the same dimension as `a` in call to `df_db`!  Please report this as a bug in diffhask!"
+
+--ifScalarThenElse (Proxy :: Proxy ar) bt (ofList_  (Proxy :: Proxy (IfScalarThenMkTensor' br ar)) . dmToDs_ ) (P.identity)
 
 
-instance (Operable c ar a, Operable c br a, IsBinOp c Add ar br a) => DfDaBin c Add ar br a where
+instance (IfScalarThenMkTensor' ar br ~ ScalarShapeAlg ar br, Operable c ar a, Operable c br a, IsBinOp c Add ar br a) => DfDaBin c Add ar br a where
+  type DfDaShape ar br = IfScalarThenMkTensor' ar br
   {-# INLINE df_da #-}
-  df_da  _ _ _ _ at = pure at
+  df_da  _ _ _ _ at = case getDims at of
+    Dim.D -> scalarToTensorLike at (Proxy :: Proxy br)
+    _ -> case Dim.sameDim (Dim.dim @br) (Dim.dim @ar) of
+      Just Dim.Evidence -> pure at
+      _ -> GHC.Err.error "Expected tangent value of `at` to be a scalar or of the same dimension as `b` in call to `df_db`!  Please report this as a bug in diffhask!"
+
 
 type IsBinOp c op ar br a
    = ( E.Additive a
@@ -346,7 +449,7 @@ type IsBinOp c op ar br a
      , Operable c (ScalarShapeAlg ar br) a)
 
 
-instance (IsBinOp c Add ar br a) => BinOp c Add ar br a
+instance (IsBinOp c Add ar br a, IfScalarThenMkTensor' br ar ~ ScalarShapeAlg ar br, IfScalarThenMkTensor' ar br ~ ScalarShapeAlg ar br) => BinOp c Add ar br a
 
 instance (P.Additive t, Dim.Dimensions ar, Dim.Dimensions br) => BinBaseOp Add ar br t where
   type BinCalcShape ar br = ScalarShapeAlg ar br
@@ -457,8 +560,8 @@ binOp' op a@(Dm ap) b@(D bp) = pure $ baseOpBin op a b
 
 binOp' op a@(Dm ap) b@(Dm bp) = pure $ baseOpBin op a b
 
-binOp' op a@(Dm ap) (DF bp bt bi) = do
-  cp <- fd_bin op a bp
+binOp' op a@(Dm ap) (DF bp bt bi) = do -- eq
+  cp <- fd_bin op a bp -- br
   cdf <- df_db op a cp bp bt
   pure $ DF cp cdf bi
 binOp' op a@(Dm ap) b@(DR bp _ bi _) = do
@@ -470,8 +573,8 @@ binOp' op a@(DF ap at ai) b@(D _ ) = do
   cdf <- df_da op b cp ap at
   pure $ DF cp (cdf) ai
 
-binOp' op a@(DF ap at ai) b@(Dm _ ) = do
-  cp <- fd_bin op ap b
+binOp' op a@(DF ap at ai) b@(Dm _ ) = do -- eq
+  cp <- fd_bin op ap b --ar
   cdf <- df_da op b cp ap at
   pure $ DF cp (cdf) ai
 
@@ -486,7 +589,7 @@ binOp' op a@(DF ap at ai) b@(DF bp bt bi ) =
       cdf <- df_db op a cp bp bt
       pure $ DF cp (cdf) bi
     GT -> do
-      cp <- fd_bin op ap b
+      cp <- fd_bin op ap b -- ar
       cdf <- df_da op b cp ap at
       pure $ DF cp (cdf) ai
 
@@ -496,7 +599,7 @@ binOp' op a@(DF ap at ai) b@(DR bp _ bi _) =
       fdb <- fd_bin op a bp
       r (fdb) (B op a b) bi
     GT -> do
-      cp <- fd_bin op ap b
+      cp <- fd_bin op ap b -- ar
       cdf <- df_da op b cp ap at
       pure $ DF cp (cdf) ai
     EQ ->

@@ -33,8 +33,8 @@ library
 
 
 
-  ghc-options:         -Wall 
-  default-extensions: NegativeLiterals UnicodeSyntax ScopedTypeVariables FlexibleContexts
+  ghc-options:        -Wall -Wcompat -Wincomplete-record-updates -Wincomplete-uni-patterns -Wredundant-constraints -Wnoncanonical-monad-instances 
+  default-extensions: NegativeLiterals UnicodeSyntax ScopedTypeVariables FlexibleContexts LambdaCase
   build-depends:       base
                      , value-supply
                      , containers
