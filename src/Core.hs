@@ -13,14 +13,16 @@
 {-# LANGUAGE TypeFamilies          #-}
 {-# LANGUAGE TypeOperators         #-}
 {-# LANGUAGE UndecidableInstances  #-}
+{-# OPTIONS_GHC -freduction-depth=10000 #-}
 
 
 module Core
     ( module Core
     ) where
 
-import           Control.Monad.State.Strict (State, evalState, get, gets,
-                                             modify, put, runState, (>=>))
+import           Control.Monad.State.Strict (State, StateT, evalState,
+                                             evalStateT, get, gets, modify, put,
+                                             runState, (>=>))
 import           Data.Constraint
 import qualified Data.Map                   as M (Map, empty, insert, lookup,
                                                   update, updateLookupWithKey)
@@ -28,8 +30,8 @@ import           Data.Unique
 import           GHC.Err
 import           GHC.Exts
 import           Internal.Internal          hiding (Differentiable (..))
-import           Internal.NumHask.Prelude   hiding (State, diff, evalState,
-                                             runState)
+import           Internal.NumHask.Prelude   hiding (State, StateT, diff,
+                                             evalState, evalStateT, runState)
 import           Lens.Micro                 ((%~), (&), (.~), (^.))
 import qualified Numeric.Dimensions         as Dim
 import qualified Numeric.Dimensions.Dim     as Dim
@@ -38,9 +40,9 @@ import qualified NumHask.Prelude            as P
 import           Prelude                    (error)
 import           Unsafe.Coerce              (unsafeCoerce)
 
-zero :: (P.AdditiveUnital a, Operable s '[] a) => D s '[] a
+zero :: (Operable s '[] a) => D s '[] a
 zero = D P.zero
-one ::(P.MultiplicativeUnital a, Operable s '[] a) => D s '[] a
+one ::(Operable s '[] a) => D s '[] a
 one = D P.one
 
 zeros' ::
@@ -57,10 +59,10 @@ ones' = A.Array $ A.generate i (const P.one)
     i = Dim.dimVal (P.undefined :: (Dim.Dim ds))
 
 zeros :: (Operable s r a) => D s r a
-zeros = Dm $ zeros'
+zeros = Dm zeros'
 
 ones :: (Operable s r a) => D s r a
-ones = Dm $ ones'
+ones = Dm ones'
 
 
 initComp :: forall a r. (P.Fractional a) => ComputationState r a
@@ -118,7 +120,7 @@ handleAnyD =
     SomeD v -> flip ($) v
 
 unsafeAddDeltas ::
-     (P.Monad m, Operable s r a)
+     (P.Monad m)
   => SomeD s a
   -> SomeD s a
   -> ComputationT s a m (D s r a)
@@ -145,15 +147,15 @@ unsafeAddDeltas sa sb =
   --     pure $ SomeD r
 
 
-applyDelta ::  (Operable s r a, P.Monad m, P.MonadState (ComputationState s a) Maybe) => UID
+applyDelta ::  (Operable s r a, P.Monad m) => UID
   ->  SomeD s a
-  ->  Maybe (ComputationT s a m (D s r a))
+  ->  (ComputationT s a m (D s r a))
 applyDelta uniq dlta = do
   st <- get
   let adjs = st ^. adjoints
   case M.lookup uniq adjs of
-    Just v  -> Just (addIt adjs v)
-    Nothing -> Nothing
+    Just v  -> (addIt adjs v)
+    Nothing -> error "key not found in adjoints!"
   where
     addIt adjs v = do
       r <- unsafeAddDeltas v dlta -- FIXME: It should be possible to return SomeD without the coercion but at present I can't make GHC happy.
@@ -200,8 +202,7 @@ reset l =
         _ -> reset xs
 
 applyAndPush :: forall s r a m op.
-     ( P.MonadState (ComputationState s a) Maybe
-     , Operable s r a
+     ( Operable s r a
      , WrappedOperable s a
      , P.Monad m
      , Trace s op r a
@@ -212,15 +213,11 @@ applyAndPush :: forall s r a m op.
   -> [(SomeD s a, SomeD s a)]
   -> ComputationT s a m ()
 applyAndPush uniq o dl xs = do
-  let mv = applyDelta uniq dl
-  case mv of
-    Just (cdA) -> do
-      dA <- cdA
-      getAndDec uniq o dA xs
-    Nothing -> error "key not found in adjoints!"
+  let cdA = applyDelta uniq dl
+  dA <- cdA
+  getAndDec uniq o dA xs
 getAndDec ::forall s r a m op.
-     ( P.MonadState (ComputationState s a) Maybe
-     , Operable s r a
+     ( Operable s r a
      , WrappedOperable s a
      , P.Monad m
      , Trace s op r a
@@ -238,8 +235,7 @@ getAndDec uniq o dA xs = do
     then pushit o dA xs
     else push xs
 pushit ::
-     ( P.MonadState (ComputationState s a) Maybe
-     , Operable s r a
+     ( Operable s r a
      , WrappedOperable s a
      , P.Monad m
      , Trace s op r a
@@ -253,7 +249,7 @@ pushit o dA xs = do
   push $ pd `mappend` xs
 
 -- recursively pushes nodes onto the reverse mode stack and composes partials at node
-push :: (P.Monad m, WrappedOperable s a,  P.MonadState (ComputationState s a) Maybe) => [(SomeD s a, SomeD s a)]
+push :: (P.Monad m, WrappedOperable s a) => [(SomeD s a, SomeD s a)]
   -> ComputationT s a m ()
 push l =
   case l of
@@ -279,7 +275,6 @@ reverseReset d = do
 reverseProp ::
      ( WrappedOperable s a
      , P.Monad m
-     , P.MonadState (ComputationState s a) Maybe
      )
   => SomeD s a
   -> SomeD s a
@@ -293,7 +288,7 @@ primalTanget :: (P.Monad m, P.AdditiveUnital a) =>
      D s r a
   -> ComputationT s a m (D s r a, Tangent s r a)
 primalTanget d = do
-  ct <- t d
+  let ct = t d
   pure (p d, ct)
 
 adjoint :: (Operable s r a, P.Monad m) =>
@@ -323,7 +318,7 @@ computeT f = evalStateT f initComp
 {-# INLINE computeAdjoints' #-}
 computeAdjoints' ::
      forall s r a m.
-     (Operable s r a, P.Monad m, P.MonadState (ComputationState s a) Maybe)
+     (Operable s r a, P.Monad m)
   => D s r a
   -> ComputationT s a m ()
 computeAdjoints' d = do
@@ -335,10 +330,7 @@ computeAdjoints' d = do
 computeAdjoints ::
      ( P.Monad m
      , Operable s r a
-     , Show (Item (s a))
-     , IsList (s a)
-     , P.MonadState (ComputationState s a) Maybe
-     , P.MultiplicativeUnital a
+
      )
   => D s r a
   -> ComputationT s a m (Adjoints s a)
@@ -349,7 +341,7 @@ computeAdjoints d = do
 {-# INLINE diff' #-}
 
 diff' ::
-     (P.MultiplicativeUnital a, P.Monad m, Operable s r a)
+     (P.Monad m, Operable s r a)
   => (D s r a -> ComputationT s a m (D s r a))
   -> D s r a
   -> ComputationT s a m (D s r a, Tangent s r a)
@@ -359,7 +351,7 @@ diff' f x = do
   primalTanget fout
 {-# INLINE diff #-}
 
-diff :: (P.MultiplicativeUnital a, P.Monad m, Operable s r a) =>
+diff :: (P.Monad m, Operable s r a) =>
      (D s r a -> ComputationT s a m (D s r a))
   -> D s r a
   -> ComputationT s a m (Tangent s r a)
@@ -367,7 +359,7 @@ diff f x =
   snd <$> diff' f x
 
 {-# INLINE diffn #-}
-diffn :: (P.MultiplicativeUnital a, P.Monad m, Operable s r a) =>
+diffn :: (P.Monad m, Operable s r a) =>
      Int
   -> (D s r a -> ComputationT s a m (D s r a))
   -> D s r a
@@ -379,7 +371,7 @@ diffn n f x =
            then f x
            else go n f x
   where
-    go :: (P.MultiplicativeUnital a, P.Monad m, Operable s r a) =>
+    go :: (P.Monad m, Operable s r a) =>
         Int
       -> (D s r a -> ComputationT s a m (D s r a))
       -> D s r a
@@ -390,7 +382,7 @@ diffn n f x =
         _ -> go (n P.- 1) f >=> diff f
 
 {-# INLINE diffn' #-}
-diffn' :: (P.MultiplicativeUnital a, P.Monad m, Operable s r a) =>
+diffn' :: (P.Monad m, Operable s r a) =>
      Int
   -> (D s r a -> ComputationT s a m (D s r a))
   -> D s r a
@@ -401,7 +393,7 @@ diffn' n f x = do
   pure (it, again)
 
 {-# INLINE grad' #-}
-grad' :: (P.MultiplicativeUnital a, P.Monad m, Operable s r a, P.MonadState (ComputationState s a) Maybe) =>
+grad' :: (P.Monad m, Operable s r a) =>
      (D s r a -> ComputationT s a m (D s r a))
   -> D s r a
   -> ComputationT s a m (D s r a, (SomeD s a))
@@ -414,7 +406,7 @@ grad' f x = do
   pure (p z, adj)
 
 {-# INLINE grad #-}
-grad :: (P.MultiplicativeUnital a, P.Monad m, Operable s r a, P.MonadState (ComputationState s a) Maybe) =>
+grad :: (P.Monad m, Operable s r a) =>
       (D s r a -> ComputationT s a m (D s r a))
   -> D s r a
   -> ComputationT s a m (SomeD s a)
@@ -423,7 +415,7 @@ grad f x = do
   pure g
 
 -- Original value and Jacobian product of `f`, at point `x`, along `v`. Forward AD.
-jacobian' :: (P.MultiplicativeUnital a, P.Monad m, Operable s r a) =>
+jacobian' :: (P.Monad m, Operable s r a) =>
      (D s r a -> ComputationT s a m (D s r a))
   -> Tangent s r a
   -> Primal s r a
@@ -433,7 +425,7 @@ jacobian' f x v = do
   fout <- f $ mkForward ntg v x
   primalTanget fout
 
-jacobian :: (P.MultiplicativeUnital a, P.Monad m, Operable s r a) =>
+jacobian :: (P.Monad m, Operable s r a) =>
       (D s r a -> ComputationT s a m (D s r a))
   -> Tangent s r a
   -> Primal s r a

@@ -19,6 +19,7 @@
 {-# LANGUAGE TypeInType                 #-}
 {-# LANGUAGE TypeApplications                 #-}
 {-# LANGUAGE UndecidableInstances       #-}
+{-# OPTIONS_GHC -freduction-depth=10000 #-}
 -- {-# LANGUAGE UndecidableSuperClasses    #-}
 module Internal.Internal (module Internal.Internal) where
 import           Control.Monad.State.Strict (State, StateT, evalState, get,
@@ -69,12 +70,12 @@ type Operable c r a
      , Dim.Dimensions r
      , A.Container c
      , Show a
-     , a ~ Item (c a)
      , Show (A.Array c r a)
      , Show (Item (c a))
+     , Item (c a) ~ a
      , IsList (c a)
-     -- , Trace c Add r a
-     , E.Num a)
+     , IsList (D c r a)
+     )
 
 type WrappedOperable c a
    = ( E.Additive a
@@ -82,12 +83,13 @@ type WrappedOperable c a
      , A.Container c
      , E.Foldable c
      , Show a
+     , Item (c a) ~ a
      , Show (Item (c a))
      , IsList (c a)
-     , E.Num a)
+     )
 
 data D c r a where
-  D :: (Show a, Operable c '[] a) => a -> D c '[] a
+  D :: (Operable c '[] a) => a -> D c '[] a
   Dm
     :: ( Operable c r a
        )
@@ -111,9 +113,6 @@ getDims :: (Dim.Dimensions r) => D c r a -> Dim.Dim r
 getDims = \case
   (_ :: D c r a) -> Dim.dim @r
 
-
-    
-
 data SomeD c a where
   SomeD :: (Operable c r a) => D c r a -> SomeD c a
 
@@ -128,7 +127,7 @@ type family GetShape a where
 
 type SameContainer a b = (GetContainer a ~ GetContainer b)
 
-instance (Show a, Show UID) => Show (D c r a) where
+instance (Show UID) => Show (D c r a) where
   show (D a)            = "D " ++ GHC.Show.show a
   show (Dm a)           = "Dm " ++  GHC.Show.show (a)
   show (DF p t ti)      = "DF " ++  GHC.Show.show p ++ GHC.Show.show t ++ (" Tag  ")
@@ -175,7 +174,7 @@ class (P.Additive t, Dim.Dimensions ar) => MonBaseOp op (ar :: [Nat]) t where
   
 data MkDm_of_Ds = MkDm_of_DsCtor deriving Show -- FIXME: this dumb ctor name.
 
-unsafeMkDfromDmAt :: (Show a) => D c r a -> Int -> D c '[] a
+unsafeMkDfromDmAt :: D c r a -> Int -> D c '[] a
 unsafeMkDfromDmAt dm i = case dm of
   Dm (A.Array m) ->  D $  m `A.idx` i
   _ -> GHC.Err.error $  "unsafeMkDfromDmAt was called on an edge that was not a Dm! " ++ (show dm)
@@ -196,7 +195,7 @@ data  TraceStack c op r a where
   FxP :: op -> FptNode c r a -> TraceStack c op r a
   MkDm_of_Ds :: [D c '[] a] -> TraceStack c MkDm_of_Ds r a
 
-instance (Show op,  Show a) => Show (TraceStack c op r a) where
+instance (Show op) => Show (TraceStack c op r a) where
   show (N o) = "N " ++ show o
   show (U o t ) = "U " ++ show o ++ show t -- ++ show c
   show (B o t tt) = "B " ++ show o ++ show t ++ show tt
@@ -264,12 +263,11 @@ pD =
     DR d _ _ _ -> pD d
 
 -- Get Tangent
-t :: forall s r a. (P.AdditiveUnital a) =>
-  D s r a
+t :: D s r a
   -> Tangent s r a
 t =
   \case
-    D _ ->  (D  zero)
+    D _ ->  (D zero)
     DF _ at _ ->  at
     DR {} -> GHC.Err.error "Can't get tangent of a reverse node"
     
@@ -280,7 +278,7 @@ instance (Eq a) => Eq (D c r a) where
 instance (Ord a) => Ord (D c r a) where
   d1 `compare` d2 = pD d1 `compare` pD d2
 
-toNumeric :: forall c r a. (Item (A.Array c r a) ~ a)=> D c r a -> A.Array c r a
+toNumeric :: forall c r a. D c r a -> A.Array c r a
 toNumeric d =
   case pD d of
     D v ->  (A.Array $ A.generate 1 (const v) :: A.Array c '[] a)
@@ -293,20 +291,21 @@ toNumericScalar d =
     _ -> GHC.Err.error "Impossible! Deepest primal of an argument toNumericScalar was not a scalar!"
 
 
+instance (Operable c r a) => IsList (D c r a) where
+  type Item (D c r a) = a
+  fromList l = Dm (A.Array . fromList $ l)
+  toList (Dm v) = GHC.Exts.toList v
+  toList (D v) = [v]
+
 ofList_ ::
-     forall c r a m.
-     ( Trace c MkDm_of_Ds r a
-     , E.Monad m
-     , Operable c r a
-     , Item (A.Array c r a) ~ Item (c a)
-     )
+     forall c r a m. (Trace c MkDm_of_Ds r a, E.Monad m)
   => Proxy r
   -> [D c '[] a]
   -> ComputationT c a m (D c r a)
-ofList_ pr l@(a:as) =
+ofList_ pr l@(a:_) =
   case a of
-    D _ -> pure . Dm $ fromList sc
-    Dm _ -> pure . Dm $ fromList sc
+    D _ -> pure $ fromList sc
+    Dm _ -> pure . Dm $ (fromList) sc
     DF _ _ ai -> do
       cap <- ofList_ pr ap
       cat <- ofList_ pr at
@@ -315,7 +314,7 @@ ofList_ pr l@(a:as) =
       ccp <- cp
       r ccp (MkDm_of_Ds l) ai
   where
-    sc = map toNumericScalar l :: [a]
+    sc = map (toNumericScalar) l :: [a]
     ap = map p l
     at = map t l
     cp = ofList_ pr ap
@@ -382,11 +381,11 @@ class (Operable c ar a, Operable c br a, IsBinOp c op ar br a, (BinCalcShape ar 
     -> ComputationT c a m (D c (DfDaShape ar br) a)
 
 
-type family IfScalarThenMkTensor' ar br :: [Nat] where
-  IfScalarThenMkTensor' '[] br = br
-  IfScalarThenMkTensor' br br = br
+-- type family IfScalarThenMkTensor' ar br :: [Nat] where
+--   IfScalarThenMkTensor' '[] br = br
+--   IfScalarThenMkTensor' br br = br
 
-scalarToTensorLike :: (a ~ Item (c a), Foldable c, Operable c t a, Monad m) => D c '[] a -> Proxy t -> ComputationT c a m (D c t a)
+scalarToTensorLike :: (Operable c t a, Monad m) => D c '[] a -> Proxy t -> ComputationT c a m (D c t a)
 scalarToTensorLike d p = ofList_ p . dmToDs_ $ d
 
 class (Operable c ar a, Operable c br a, IsBinOp c op ar br a, (BinCalcShape ar br) ~ (DfDbShape ar br)) =>
@@ -415,8 +414,8 @@ class (Operable c ar a, Operable c br a, IsBinOp c op ar br a, (BinCalcShape ar 
 
 -- ifScalarThenOfList :: forall c r a rr. (Operable c r a, Operable c rr a) => D c r a ->  (D c r a -> D c rr a) -> D c rr a
     
-instance (IfScalarThenMkTensor' br ar ~ ScalarShapeAlg ar br, Operable c ar a, Operable c br a, IsBinOp c Add ar br a) => DfDbBin c Add ar br a where
-  type DfDbShape ar br = IfScalarThenMkTensor' br ar
+instance ( Operable c ar a, Operable c br a, IsBinOp c Add ar br a) => DfDbBin c Add ar br a where
+  type DfDbShape ar br =  ScalarShapeAlg ar br -- IfScalarThenMkTensor' br ar
   {-# INLINE df_db #-}
   df_db _ _ _ _ bt = case getDims bt of
     Dim.D -> scalarToTensorLike bt (Proxy :: Proxy ar)
@@ -427,8 +426,8 @@ instance (IfScalarThenMkTensor' br ar ~ ScalarShapeAlg ar br, Operable c ar a, O
 --ifScalarThenElse (Proxy :: Proxy ar) bt (ofList_  (Proxy :: Proxy (IfScalarThenMkTensor' br ar)) . dmToDs_ ) (P.identity)
 
 
-instance (IfScalarThenMkTensor' ar br ~ ScalarShapeAlg ar br, Operable c ar a, Operable c br a, IsBinOp c Add ar br a) => DfDaBin c Add ar br a where
-  type DfDaShape ar br = IfScalarThenMkTensor' ar br
+instance ( Operable c ar a, Operable c br a, IsBinOp c Add ar br a) => DfDaBin c Add ar br a where
+  type DfDaShape ar br = ScalarShapeAlg ar br
   {-# INLINE df_da #-}
   df_da  _ _ _ _ at = case getDims at of
     Dim.D -> scalarToTensorLike at (Proxy :: Proxy br)
@@ -449,7 +448,7 @@ type IsBinOp c op ar br a
      , Operable c (ScalarShapeAlg ar br) a)
 
 
-instance (IsBinOp c Add ar br a, IfScalarThenMkTensor' br ar ~ ScalarShapeAlg ar br, IfScalarThenMkTensor' ar br ~ ScalarShapeAlg ar br) => BinOp c Add ar br a
+instance (IsBinOp c Add ar br a) => BinOp c Add ar br a
 
 instance (P.Additive t, Dim.Dimensions ar, Dim.Dimensions br) => BinBaseOp Add ar br t where
   type BinCalcShape ar br = ScalarShapeAlg ar br
@@ -457,14 +456,12 @@ instance (P.Additive t, Dim.Dimensions ar, Dim.Dimensions br) => BinBaseOp Add a
   baseOpBin _ (Dm a) (D b) = Dm $ a P..+ b
   baseOpBin _ (D a) (Dm b) = Dm $ a P.+. b
   baseOpBin _ (Dm a) (Dm b) =
-    case check (Dim.dim @ar) (Dim.dim @br) of
+    case Dim.sameDim (Dim.dim @ar) (Dim.dim @br) of
       Just Dim.Evidence -> Dm $ a P..+. b
       Nothing ->
         GHC.Err.error
           "Dimensions of arguments to binOp should have been equal: Please report this as a bug in diffhask."
-    where
-      check :: Dim.Dim ar -> Dim.Dim br -> Maybe (Dim.Evidence (ar ~ br))
-      check = Dim.sameDim
+
 
 instance ( Operable s ar a
          , Operable s br a
