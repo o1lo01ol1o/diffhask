@@ -45,24 +45,12 @@ zero = D P.zero
 one ::(Operable s '[] a) => D s '[] a
 one = D P.one
 
-zeros' ::
-     (Operable c ds a) => A.Array c ds a
-zeros' = A.Array $ A.generate i (const P.zero)
-  where
-    i = Dim.dimVal (P.undefined :: (Dim.Dim ds))
-
-
-ones' ::
-     (Operable c ds a) => A.Array c ds a
-ones' = A.Array $ A.generate i (const P.one)
-  where
-    i = Dim.dimVal (P.undefined :: (Dim.Dim ds))
 
 zeros :: (Operable s r a) => D s r a
-zeros = Dm zeros'
+zeros = fromList $ repeat P.zero
 
 ones :: (Operable s r a) => D s r a
-ones = Dm ones'
+ones = fromList $ repeat P.one
 
 
 initComp :: forall a r. (P.Fractional a) => ComputationState r a
@@ -89,18 +77,8 @@ addDeltas' ::
 addDeltas' a b =
   case (a, b) of
     (D xa :: D s ar a, D xb :: D s br a) -> a + b
-    (Dm ma :: D s ar a, D xb :: D s br a) ->
-      case checkTensorScalar (Dim.dim @br) (Dim.dim @ar) of
-        GT -> a .+ b
-        _ ->
-          GHC.Err.error
-            "Expected tensor x scalar addition but dimension types were in contradication! Please report this as a bug in diffhask!"
-    (D xa :: D s ar a, Dm mb :: D s br a) ->
-      case checkScalarTensor (Dim.dim @br) (Dim.dim @ar) of
-        LT -> a +. b
-        _ ->
-          GHC.Err.error
-            "Expected scalar x tensor addition but dimension types were in contradication! Please report this as a bug in diffhask!"
+    (Dm ma :: D s ar a, D xb :: D s br a) -> a .+ b
+    (D xa :: D s ar a, Dm mb :: D s br a) -> a +. b
     (Dm ma :: D s ar a, Dm mb :: D s br a) ->
       case checkSame (Dim.dim @br) (Dim.dim @ar) of
         Just Dim.Evidence -> a .+. b
@@ -312,6 +290,9 @@ computeT ::
      (Monad m, Fractional a1) => StateT (ComputationState r a1) m a2 -> m a2
 computeT f = evalStateT f initComp
 
+compute :: (Fractional a1) => StateT (ComputationState r a1) Identity a2 -> a2
+compute f = runIdentity $ evalStateT f initComp
+
 -- compute :: (P.RealFrac a) => ComputationT s a m (b) -> b
 -- compute f = evalState f initComp
 
@@ -431,3 +412,5 @@ jacobian :: (P.Monad m, Operable s r a) =>
   -> Primal s r a
   -> ComputationT s a m (Tangent s r a)
 jacobian f x v = snd <$> jacobian' f x v
+
+

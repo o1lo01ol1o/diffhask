@@ -12,7 +12,7 @@ category:            Math
 build-type:          Simple
 extra-source-files:  README.md
 cabal-version:       >=1.10
-tested-with:         GHC == 8.2.2
+tested-with:         GHC == 8.4.1
 
 library
   hs-source-dirs:      src
@@ -28,14 +28,11 @@ library
                      , Internal.NumHask.Algebra.Module
                      , Internal.NumHask.Algebra.Metric
                      , Internal.NumHask.Algebra.Singleton
-                     
-
-
-
+ 
 
   ghc-options:        -Wall -Wcompat -Wincomplete-record-updates -Wincomplete-uni-patterns -Wredundant-constraints -Wnoncanonical-monad-instances 
-  default-extensions: NegativeLiterals UnicodeSyntax ScopedTypeVariables FlexibleContexts LambdaCase
-  build-depends:       base
+  default-extensions: NegativeLiterals UnicodeSyntax ScopedTypeVariables FlexibleContexts LambdaCase 
+  build-depends:       base 
                      , value-supply
                      , containers
                      , mtl
@@ -46,17 +43,10 @@ library
                      , protolude
                      , dimensions
                      , numhask
+                     , numhask-prelude
                      , numhask-array
-                       , constraints
+                     , constraints
                      
-
-                     
-                     
-                   
-                      
-
-
-
 
 
   default-language:    Haskell2010
@@ -66,16 +56,16 @@ test-suite diffhask-test
   hs-source-dirs:      test
   main-is:             Spec.hs
   default-extensions: NegativeLiterals OverloadedStrings UnicodeSyntax ScopedTypeVariables FlexibleContexts NoImplicitPrelude
-  build-depends:       base
+  build-depends:       base 
                      , diffhask
                      , text
-
                      , QuickCheck
                      , doctest
                      , tasty
                      , tasty-quickcheck
-                       , tasty-hunit 
-                     ,  numhask
+                     , tasty-hunit 
+                     , numhask
+                     , numhask-prelude
                      , numhask-array
 
   
@@ -88,10 +78,11 @@ benchmark diffhask-benchmark
   ghc-options:         -Wall -O2 -fllvm -threaded -rtsopts -with-rtsopts=-N
   hs-source-dirs:      benchmark
   main-is:             Main.hs
-  build-depends:       base
+  build-depends:       base 
                      , criterion
                      , diffhask
-                       , numhask
+                     , numhask
+                     , numhask-prelude
                      , numhask-array
 
 

@@ -1,20 +1,14 @@
 
-  
-packages:
-- .
-- location:
-     git: https://github.com/o1lo01ol1o/numhask-array
-     commit: b5c745d24630dfff294d37d1ed93352f724c5792
-  extra-dep: true
-
 extra-deps:
 - dimensions-0.3.2.0
-- tasty-0.12
 - value-supply-0.6
-- constraint-manip-0.1.1.0
-- indextype-0.2.3.0
-- polydata-0.1.0.0
+- git: git@github.com:tonyday567/numhask.git
+  commit: c672a2a499ae79227faa5de6a8d97d76e9e73016
+  subdirs:
+    - numhask
+    - numhask-prelude
+    - numhask-array
 
 
-resolver: lts-11.1
-allow-newer: true
+
+resolver: nightly-2018-04-04
