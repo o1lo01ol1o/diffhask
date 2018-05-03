@@ -54,6 +54,10 @@ type Computation c a = StateT (ComputationState c a) Identity
 type ComputationT c a = StateT (ComputationState c a)
 
 
+type C c r a = Computation c a (D c r a)
+
+type CT c r a m = ComputationT c a m (D c r a) 
+
 data Add = Add deriving Show
 
 type Operable c r a
@@ -110,16 +114,16 @@ type family GetShape a where
   GetShape (D c r a) = r
   GetShape (ComputationT _ _ _ (D c r a)) = r
 
-type SameContainer a b = (GetContainer a ~ GetContainer b)
+-- type SameContainer a b = (GetContainer a ~ GetContainer b)
   
-type family SameTransformer' a b m :: Bool where
-  SameTransformer' (ComputationT _ _ m _) (D _ _ _) m = 'True
-  SameTransformer' (D _ _ _) (ComputationT _ _ m _)  m = 'True
-  SameTransformer' (D _ _ _) (D _ _ _)  m = 'True
-  SameTransformer' (ComputationT _ _ m _) (ComputationT _ _ m _)  m = 'True
-  SameTransformer' _ _ _ = 'False
+-- type family SameTransformer' a b m :: Bool where
+--   SameTransformer' (ComputationT _ _ m _) (D _ _ _) m = 'True
+--   SameTransformer' (D _ _ _) (ComputationT _ _ m _)  m = 'True
+--   SameTransformer' (D _ _ _) (D _ _ _)  m = 'True
+--   SameTransformer' (ComputationT _ _ m _) (ComputationT _ _ m _)  m = 'True
+--   SameTransformer' _ _ _ = 'False
 
-type SameMonad a b m = (SameTransformer' a b m ~ 'True)
+-- type SameMonad a b m = (SameTransformer' a b m ~ 'True)
 
 
 type family IsTensor a where
