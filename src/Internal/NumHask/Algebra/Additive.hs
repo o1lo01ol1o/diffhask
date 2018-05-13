@@ -135,25 +135,26 @@ instance (IsMonOp Negate s r a) => MonOp s Negate r a where
 
 
 
-class (P.Monad m, P.AdditiveInvertible t, IsMonOp Negate c r t) =>
-      AdditiveInvertible m c r a t | a -> t, a -> r, a -> c where
-  negate :: a -> ComputationT c t m (D c (MonCalcShape r) t)
+class (P.Monad m, P.AdditiveInvertible t, IsMonOp Negate c (GetShape a) t) =>
+      AdditiveInvertible m c a t | a -> t, a -> c where
+  negate :: a -> ComputationT c t m (D c (MonCalcShape (GetShape a)) t)
 
 
 instance (P.Monad m, P.AdditiveInvertible t, IsMonOp Negate c r t, m ~ m') =>
-         AdditiveInvertible m c r (ComputationT c t m' (D c r t)) t where
+         AdditiveInvertible m c (ComputationT c t m' (D c r t)) t where
   negate a = do
     ca <- a
     monOp Negate ca
 
 instance (P.Monad m, P.AdditiveInvertible t, IsMonOp Negate c s t) =>
-         AdditiveInvertible m c s (D c s t) t where
+         AdditiveInvertible m c (D c s t) t where
   negate a = monOp Negate a
 
 
-instance (P.Additive t, P.AdditiveInvertible t, Dim.Dimensions ar) => MonBaseOp Negate ar t where
+instance (P.Additive t, P.AdditiveInvertible t, Dim.Dimensions ar) =>
+         MonBaseOp Negate ar t where
   type MonCalcShape ar = ar
-  baseOpMon _ (D v)  = D $ P.negate v
+  baseOpMon _ (D v) = D $ P.negate v
   baseOpMon _ (Dm v) = Dm $ P.negate v
 
 instance (Operable c r a) => Trace c Negate r a where
@@ -162,9 +163,15 @@ instance (Operable c r a) => Trace c Negate r a where
 class (P.Monad m, IsBinOp c Add (GetShape a) (GetShape b) t, GetShape b ~ '[]) =>
       AdditiveModule m c a b t | a -> t, b -> t, a b -> t, a b -> c where
   infixl 6 .+
-  (.+) ::  a -> b -> ComputationT c t m (D c (BinCalcShape (GetShape a) (GetShape b)) t)
+  (.+) ::
+       a
+    -> b
+    -> ComputationT c t m (D c (BinCalcShape (GetShape a) (GetShape b)) t)
   infixl 6 +.
-  (+.) :: b -> a -> ComputationT c t m (D c (BinCalcShape  (GetShape a) (GetShape b)) t)
+  (+.) ::
+       b
+    -> a
+    -> ComputationT c t m (D c (BinCalcShape (GetShape a) (GetShape b)) t)
 
 instance (P.Monad m, IsBinOp c Add ar '[] t, m ~ m') =>
          AdditiveModule m c (ComputationT c t m' (D c ar t)) (D c '[] t) t where
@@ -201,8 +208,8 @@ instance (P.Monad m, IsBinOp c Add ar '[] t,m ~ m') =>
     binOp Add a cb
 
 class ( AdditiveModule m c a b t
-      , AdditiveInvertible m c (GetShape a) a t
-      , AdditiveInvertible m c (GetShape b) b t
+      , AdditiveInvertible m c a t
+      , AdditiveInvertible m c b t
       , GetShape b ~ '[]
       ) =>
       AdditiveGroupModule m c a b t | a -> t, b -> t, a b -> t, a b -> c where
@@ -293,8 +300,7 @@ class AdditiveBasis m c r a b t | a b -> r, a b -> t, a b -> c where
 
 instance (P.Monad m, IsBinOp c Add s s t) =>
          AdditiveBasis m c s (D c s t) (D c s t) t where
-  (.+.) a b =
-    binOp Add a b
+  (.+.) a b = binOp Add a b
 
 
 instance (P.Monad m, IsBinOp c Add s s t, m ~ m') =>
@@ -332,7 +338,7 @@ class ( P.Monad m
       , GetShape a ~ MonCalcShape (GetShape a)
       , r ~ MonCalcShape r
       , GetShape a ~ GetShape b
-      , AdditiveInvertible m c r b t
+      , AdditiveInvertible m c b t
       )=>
       AdditiveGroupBasis m c r a b t | a b -> r, a b -> t, a b -> c where
   infixl 6 .-.
@@ -353,8 +359,8 @@ instance ( P.Monad m
          , IsBinOp c Add s s t
          , IsMonOp Negate c s t
          , s ~ MonCalcShape s
-                  , AdditiveInvertible m c s (ComputationT c t m' (D c s t)) t
-                  , m ~ m'
+         , AdditiveInvertible m c (ComputationT c t m' (D c s t)) t
+         , m ~ m'
          ) =>
          AdditiveGroupBasis m c s (D c s t) (ComputationT c t m' (D c s t)) t where
   (.-.) a cb = do
@@ -384,7 +390,7 @@ instance ( P.Monad m
          , IsBinOp c Add s s t
          , IsMonOp Negate c s t
          , s ~ MonCalcShape s
-         , AdditiveInvertible m c s (ComputationT c t m (D c s t)) t
+         , AdditiveInvertible m c (ComputationT c t m (D c s t)) t
          , AdditiveBasis m c s (D c s t) ((ComputationT c t m (D c s t))) t
          , AdditiveBasis m c s ((ComputationT c t m (D c s t))) (D c s t) t
          , m ~ m'
@@ -404,8 +410,5 @@ instance ( P.Monad m
 --   => f (D c s t)
 --   -> (ComputationT c t m (D c s t))
 -- sum = P.foldr (.+.) zeros
-
-tmp :: (Dim.Dimensions r) => D [] r P.Float -> C [] r P.Float 
-tmp =  (\(x) -> negate ((D 1.0 :: D [] '[] P.Float) +. x))
 
 

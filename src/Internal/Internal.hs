@@ -21,6 +21,7 @@
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE UndecidableInstances       #-}
+{-# LANGUAGE UndecidableSuperClasses       #-}
 {-# OPTIONS_GHC -freduction-depth=10000 #-}
 module Internal.Internal (module Internal.Internal) where
 import Control.Monad.State.Strict (StateT, get, put)
@@ -33,6 +34,7 @@ import           Lens.Micro.TH              (makeLenses)
 import qualified Numeric.Dimensions         as Dim
 import           NumHask.Array              ()
 import qualified NumHask.Array              as A
+
 import NumHask.Prelude hiding (Show, State, StateT, show)
 import qualified NumHask.Prelude            as P
 
@@ -114,21 +116,16 @@ type family GetShape a where
   GetShape (D c r a) = r
   GetShape (ComputationT _ _ _ (D c r a)) = r
 
--- type SameContainer a b = (GetContainer a ~ GetContainer b)
-  
--- type family SameTransformer' a b m :: Bool where
---   SameTransformer' (ComputationT _ _ m _) (D _ _ _) m = 'True
---   SameTransformer' (D _ _ _) (ComputationT _ _ m _)  m = 'True
---   SameTransformer' (D _ _ _) (D _ _ _)  m = 'True
---   SameTransformer' (ComputationT _ _ m _) (ComputationT _ _ m _)  m = 'True
---   SameTransformer' _ _ _ = 'False
-
--- type SameMonad a b m = (SameTransformer' a b m ~ 'True)
-
-
 type family IsTensor a where
   IsTensor (x:xs) = 'True
   IsTensor '[] = 'False
+
+type family IsScalar a where
+  IsScalar '[] = 'True
+  IsScalar _ = 'False
+
+type Scalar a = (a ~ '[])
+type Tensor a = (IsTensor a ~ 'True)
 
 instance (Show UID) => Show (D c r a) where
   show (D a)            = "D " ++ P.show a
@@ -138,7 +135,7 @@ instance (Show UID) => Show (D c r a) where
 
 type Primal c r a = D c r a
 type Tangent c r a = D c r a
-
+ 
 type FptNode c r a = (D c r a, D c r a, D c r a, D c r a) -- nodes needed for a fixpoint evaluation
 
 dmToDs_ :: (IsTensor r ~ 'True) =>  D c r a -> [D c '[] a]
@@ -173,10 +170,34 @@ instance (Operable c r a, IsTensor r ~ 'True) => Trace c MkDm_of_Ds r a where
 instance (Operable c r a) => Trace c Add r a where
   pushAlg (B _ a b) dA = pure [( SomeD dA, SomeD a), (SomeD dA, SomeD b), (SomeD dA, SomeD a), (SomeD dA, SomeD b)]
 
+-- class (ScalarShapeAlg b a ~ ScalarShapeAlg a b) =>
+--       ScalarAlg a b 
+  --where
+  --type ScalarShapeAlg (a :: [Nat]) (b :: [Nat]) :: [Nat]
+
+-- instance ScalarAlg a a
+-- instance ScalarAlg '[] b
+-- instance ScalarAlg a '[]
+-- instance ScalarAlg '[] b where
+--   type ScalarShapeAlg '[] b = b
+
+-- instance ScalarAlg a '[] where
+--   type ScalarShapeAlg a '[] = a
+  
+-- instance ScalarAlg '[] '[] where
+--   type ScalarShapeAlg '[] '[] = '[]
+  
+-- instance ScalarAlg '[as] '[as] where
+--   type ScalarShapeAlg '[as] '[as]  = '[as]
+
+type family ScalarShapeAlg a b :: [Nat] where
+  ScalarShapeAlg '[] b = b
+  ScalarShapeAlg a '[] = a
+  ScalarShapeAlg a a = a
 
 data Noop = Noop deriving Show
 
-class (P.Additive t, Dim.Dimensions ar, Dim.Dimensions br) => BinBaseOp op (ar :: [Nat]) (br :: [Nat]) t where
+class ( P.Additive t, Dim.Dimensions ar, Dim.Dimensions br) => BinBaseOp op (ar :: [Nat]) (br :: [Nat]) t where
   type BinCalcShape ar br :: [Nat]
   baseOpBin :: op -> (D c ar t) -> (D c br t) -> (D c (BinCalcShape ar br) t)
 
@@ -314,16 +335,16 @@ ofList_ ::
 ofList_ pr l@(a:_) =
   case a of
     D _ -> pure $ fromList sc
-    Dm _ -> pure . Dm $ (fromList) sc
+    Dm _ -> pure . Dm $ fromList sc
     DF _ _ ai -> do
       cap <- ofList_ pr ap
       cat <- ofList_ pr at
-      pure $ DF (cap) (cat) ai
+      pure $ DF cap cat ai
     DR _ _ ai _ -> do
       ccp <- cp
       r ccp (MkDm_of_Ds l) ai
   where
-    sc = map (toNumericScalar) l :: [a]
+    sc = map toNumericScalar l :: [a]
     ap = map p l
     at = map t l
     cp = ofList_ pr ap
@@ -377,7 +398,7 @@ type CPrimal c r a = Primal c r a
 type ATangent c r a = Tangent c r a
 type BTangent c r a = Tangent c r a
 
-class (Operable c ar a, Operable c br a, IsBinOp c op ar br a, (BinCalcShape ar br) ~ (DfDaShape ar br)) =>
+class (DfOperable op c ar br a) =>
       DfDaBin c op ar br a where
   type DfDaShape ar br :: [Nat]
   df_da ::
@@ -389,11 +410,44 @@ class (Operable c ar a, Operable c br a, IsBinOp c op ar br a, (BinCalcShape ar 
     -> BTangent c ar a
     -> ComputationT c a m (D c (DfDaShape ar br) a)
 
-scalarToTensorLike :: (Operable c t a, Monad m) => D c '[] a -> Proxy t -> ComputationT c a m (D c t a)
-scalarToTensorLike (D v) _ = pure. fromList $ repeat v
+scalarToTensorLike ::
+     (Operable c t a, Monad m)
+  => D c '[] a
+  -> Proxy t
+  -> ComputationT c a m (D c t a)
+scalarToTensorLike (D v) _ = pure . fromList $ repeat v
     
+sameOrError ::
+     (Dim.Dimensions ar, Dim.Dimensions br)
+  => (D c ar a -> D c br a -> ComputationT c a m (D c cr a))
+  -> D c ar a
+  -> D c br a
+  -> ComputationT c a m (D c cr a)
+sameOrError f (da :: D c ar a) (db :: D c br a) =
+  case Dim.sameDim (Dim.dim @br) (Dim.dim @ar) of
+    Just Dim.Evidence -> f da db
+    _ ->
+      GHC.Err.error $
+      "Expected dimensions to be the same!  This should be impossible: Please report this as a bug in diffhask! Values:" ++
+      show da ++ "  " ++ show db
+      
+handleScalarBroadcast ::
+     (Dim.Dimensions ar, Dim.Dimensions br, P.Monad m)
+  => (D c ar a -> Tangent c br a -> ComputationT c a m (D c cr a))
+  -> D c ar a
+  -> Tangent c br a
+  -> ComputationT c a m (D c cr a)
+handleScalarBroadcast f a t =
+  case (a, t) of
+    (Dm _, D _) -> do
+      ct <- scalarToTensorLike t (Proxy :: Proxy ar)
+      f a ct
+    (D _, Dm _) -> do
+      ca <- scalarToTensorLike a (Proxy :: Proxy br)
+      f ca t
+    (Dm _, Dm _) -> sameOrError f a t
 
-class (Operable c ar a, Operable c br a, IsBinOp c op ar br a, (BinCalcShape ar br) ~ (DfDbShape ar br)) =>
+class (DfOperable op c ar br a) =>
       DfDbBin c op ar br a where
   type DfDbShape ar br :: [Nat]
   df_db ::
@@ -403,10 +457,12 @@ class (Operable c ar a, Operable c br a, IsBinOp c op ar br a, (BinCalcShape ar 
     -> CPrimal c (BinCalcShape ar br) a
     -> APrimal c br a
     -> ATangent c br a
-    -> ComputationT c a m( D c (DfDbShape ar br) a)
+    -> ComputationT c a m (D c (BinCalcShape ar br) a)
 
 
-instance (Operable c ar a, Operable c br a, IsBinOp c Add ar br a) =>
+type DfOperable op c ar br a = (Operable c ar a, Operable c br a, IsBinOp c op ar br a)
+
+instance (DfOperable Add c ar br a) =>
          DfDbBin c Add ar br a where
   type DfDbShape ar br = ScalarShapeAlg ar br -- IfScalarThenMkTensor' br ar
   {-# INLINE df_db #-}
@@ -516,10 +572,6 @@ class ( Show op
   binOp = binOp'
 
 
-type family ScalarShapeAlg (a :: [Nat]) (b :: [Nat]) :: [Nat] where
-  ScalarShapeAlg '[] a = a
-  ScalarShapeAlg a '[] = a
-  ScalarShapeAlg a a = a
 
 {-# inline binOp' #-}
 binOp' ::
