@@ -3,7 +3,7 @@ extra-deps:
 - dimensions-0.3.2.0
 - value-supply-0.6
 - git: git@github.com:tonyday567/numhask.git
-  commit: c672a2a499ae79227faa5de6a8d97d76e9e73016
+  commit: 0b4dfe39686bf40146f8c3b0018dd1e506723c9e
   subdirs:
     - numhask
     - numhask-prelude

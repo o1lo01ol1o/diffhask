@@ -40,16 +40,16 @@ import qualified NumHask.Prelude            as P
 import           Prelude                    (error)
 import           Unsafe.Coerce              (unsafeCoerce)
 
-zero :: (Operable s '[] a) => D s '[] a
+zero :: (DArray s '[] a) => D s '[] a
 zero = D P.zero
-one ::(Operable s '[] a) => D s '[] a
+one ::(DArray s '[] a) => D s '[] a
 one = D P.one
 
 
-zeros :: (Operable s r a) => D s r a
+zeros :: (DArray s r a) => D s r a
 zeros = fromList $ repeat P.zero
 
-ones :: (Operable s r a) => D s r a
+ones :: (DArray s r a) => D s r a
 ones = fromList $ repeat P.one
 
 
@@ -57,14 +57,14 @@ initComp :: forall a r. (P.Fractional a) => ComputationState r a
 initComp = ComputationState (Tag 0) (UID 0) M.empty M.empty (1e-6 :: a) (P.sum $ P.replicate 1000 1)
 
 
-mkForward :: (Operable s r a) => Tag -> Tangent s r a -> Primal s r a  -> D s r a
+mkForward :: (DArray s r a) => Tag -> Tangent s r a -> Primal s r a  -> D s r a
 mkForward i tg d  = DF d tg i
 
 
 mkReverse :: ( Trace s Noop r a, P.Monad m) => Tag -> D s r a -> ComputationT s a m (D s r a)
 mkReverse i d = r d (N Noop) i
 
-instance (Operable s r a) => Trace s Noop  r a where
+instance (DArray s r a) => Trace s Noop  r a where
   pushAlg _ _ = pure []
   resetAlg _ = pure []
 
@@ -92,7 +92,7 @@ addDeltas' a b =
     checkTensorScalar = Dim.compareDim
     checkScalarTensor = checkTensorScalar
 
-handleAnyD ::  SomeD c a -> (forall r. Operable c r a => D c r a -> rv) -> rv
+handleAnyD ::  SomeD c a -> (forall r. DArray c r a => D c r a -> rv) -> rv
 handleAnyD =
   \case
     SomeD v -> flip ($) v
@@ -125,7 +125,7 @@ unsafeAddDeltas sa sb =
   --     pure $ SomeD r
 
 
-applyDelta ::  (Operable s r a, P.Monad m) => UID
+applyDelta ::  (DArray s r a, P.Monad m) => UID
   ->  SomeD s a
   ->  (ComputationT s a m (D s r a))
 applyDelta uniq dlta = do
@@ -180,7 +180,7 @@ reset l =
         _ -> reset xs
 
 applyAndPush :: forall s r a m op.
-     ( Operable s r a
+     ( DArray s r a
      , WrappedOperable s a
      , P.Monad m
      , Trace s op r a
@@ -195,7 +195,7 @@ applyAndPush uniq o dl xs = do
   dA <- cdA
   getAndDec uniq o dA xs
 getAndDec ::forall s r a m op.
-     ( Operable s r a
+     ( DArray s r a
      , WrappedOperable s a
      , P.Monad m
      , Trace s op r a
@@ -213,7 +213,7 @@ getAndDec uniq o dA xs = do
     then pushit o dA xs
     else push xs
 pushit ::
-     ( Operable s r a
+     ( DArray s r a
      , WrappedOperable s a
      , P.Monad m
      , Trace s op r a
@@ -269,7 +269,7 @@ primalTanget d = do
   let ct = t d
   pure (p d, ct)
 
-adjoint :: (Operable s r a, P.Monad m) =>
+adjoint :: (DArray s r a, P.Monad m) =>
       D s r a
   -> ComputationT s a m (SomeD s a)
 adjoint d =
@@ -299,7 +299,7 @@ compute f = runIdentity $ evalStateT f initComp
 {-# INLINE computeAdjoints' #-}
 computeAdjoints' ::
      forall s r a m.
-     (Operable s r a, P.Monad m)
+     (DArray s r a, P.Monad m)
   => D s r a
   -> ComputationT s a m ()
 computeAdjoints' d = do
@@ -310,7 +310,7 @@ computeAdjoints' d = do
 {-# INLINE computeAdjoints #-}
 computeAdjoints ::
      ( P.Monad m
-     , Operable s r a
+     , DArray s r a
 
      )
   => D s r a
@@ -322,7 +322,7 @@ computeAdjoints d = do
 {-# INLINE diff' #-}
 
 diff' ::
-     (P.Monad m, Operable s r a)
+     (P.Monad m, DArray s r a)
   => (D s r a -> ComputationT s a m (D s r a))
   -> D s r a
   -> ComputationT s a m (D s r a, Tangent s r a)
@@ -332,7 +332,7 @@ diff' f x = do
   primalTanget fout
 {-# INLINE diff #-}
 
-diff :: (P.Monad m, Operable s r a) =>
+diff :: (P.Monad m, DArray s r a) =>
      (D s r a -> ComputationT s a m (D s r a))
   -> D s r a
   -> ComputationT s a m (Tangent s r a)
@@ -340,7 +340,7 @@ diff f x =
   snd <$> diff' f x
 
 {-# INLINE diffn #-}
-diffn :: (P.Monad m, Operable s r a) =>
+diffn :: (P.Monad m, DArray s r a) =>
      Int
   -> (D s r a -> ComputationT s a m (D s r a))
   -> D s r a
@@ -352,7 +352,7 @@ diffn n f x =
            then f x
            else go n f x
   where
-    go :: (P.Monad m, Operable s r a) =>
+    go :: (P.Monad m, DArray s r a) =>
         Int
       -> (D s r a -> ComputationT s a m (D s r a))
       -> D s r a
@@ -363,7 +363,7 @@ diffn n f x =
         _ -> go (n P.- 1) f >=> diff f
 
 {-# INLINE diffn' #-}
-diffn' :: (P.Monad m, Operable s r a) =>
+diffn' :: (P.Monad m, DArray s r a) =>
      Int
   -> (D s r a -> ComputationT s a m (D s r a))
   -> D s r a
@@ -374,7 +374,7 @@ diffn' n f x = do
   pure (it, again)
 
 {-# INLINE grad' #-}
-grad' :: (P.Monad m, Operable s r a) =>
+grad' :: (P.Monad m, DArray s r a) =>
      (D s r a -> ComputationT s a m (D s r a))
   -> D s r a
   -> ComputationT s a m (D s r a, (SomeD s a))
@@ -387,7 +387,7 @@ grad' f x = do
   pure (p z, adj)
 
 {-# INLINE grad #-}
-grad :: (P.Monad m, Operable s r a) =>
+grad :: (P.Monad m, DArray s r a) =>
       (D s r a -> ComputationT s a m (D s r a))
   -> D s r a
   -> ComputationT s a m (SomeD s a)
@@ -396,7 +396,7 @@ grad f x = do
   pure g
 
 -- Original value and Jacobian product of `f`, at point `x`, along `v`. Forward AD.
-jacobian' :: (P.Monad m, Operable s r a) =>
+jacobian' :: (P.Monad m, DArray s r a) =>
      (D s r a -> ComputationT s a m (D s r a))
   -> Tangent s r a
   -> Primal s r a
@@ -406,7 +406,7 @@ jacobian' f x v = do
   fout <- f $ mkForward ntg v x
   primalTanget fout
 
-jacobian :: (P.Monad m, Operable s r a) =>
+jacobian :: (P.Monad m, DArray s r a) =>
       (D s r a -> ComputationT s a m (D s r a))
   -> Tangent s r a
   -> Primal s r a

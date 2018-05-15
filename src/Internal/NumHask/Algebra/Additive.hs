@@ -43,27 +43,27 @@ import qualified NumHask.Prelude    as P
 data Negate = Negate deriving Show
 
 
-class (Operable c '[] t, P.Monad m) =>
+class (DArray c '[] t, P.Monad m) =>
       Additive m c a b t | a -> t, b -> t, a b -> t, a b -> c where
   (+) :: a -> b -> ComputationT c t m (D c '[] t)
 
-instance (Operable c '[] t, P.Monad m) =>
+instance (DArray c '[] t, P.Monad m) =>
          Additive m c (D c '[] t) (D c '[] t) t where
   (+) a b = binOp Add a b
 
-instance (Operable c '[] t, P.Monad m, m ~ m') =>
+instance (DArray c '[] t, P.Monad m, m ~ m') =>
          Additive m c (ComputationT c t m' (D c '[] t)) (D c '[] t) t where
   (+) a b = do
     ca <- a
     binOp Add ca b
 
-instance (Operable c '[] t, P.Monad m, m ~ m') =>
+instance (DArray c '[] t, P.Monad m, m ~ m') =>
          Additive m c (D c '[] t) (ComputationT c t m' (D c '[] t)) t where
   (+) a b = do
     cb <- b
     binOp Add a cb
 
-instance (Operable c '[] t, P.Monad m, m ~ m', m ~ m'') =>
+instance (DArray c '[] t, P.Monad m, m ~ m', m ~ m'') =>
          Additive m c (ComputationT c t m' (D c '[] t)) (ComputationT c t m'' (D c '[] t)) t where
   (+) a b = do
     ca <- a
@@ -71,7 +71,7 @@ instance (Operable c '[] t, P.Monad m, m ~ m', m ~ m'') =>
     binOp Add ca cb
 
 
-class ( Operable c '[] t
+class ( DArray c '[] t
       , P.Monad m
       , MonCalcShape '[] ~ '[]
       , IsMonOp Negate c '[] t
@@ -79,7 +79,7 @@ class ( Operable c '[] t
       AdditiveGroup m c a b t | a -> t, b -> t, a b -> t, a b -> c where
   (-) :: a -> b -> ComputationT c t m (D c '[] t)
 
-instance ( Operable c '[] t
+instance ( DArray c '[] t
          , P.Monad m
          , MonCalcShape '[] ~ '[]
          , P.AdditiveInvertible t,IsMonOp Negate c '[] t
@@ -90,7 +90,7 @@ instance ( Operable c '[] t
     nb <- negate b
     binOp Add a nb
 
-instance ( Operable c '[] t
+instance ( DArray c '[] t
          , P.Monad m
          , MonCalcShape '[] ~ '[]
          , P.AdditiveInvertible t,IsMonOp Negate c '[] t
@@ -102,7 +102,7 @@ instance ( Operable c '[] t
     ca <- a
     binOp Add ca nb
 
-instance ( Operable c '[] t
+instance ( DArray c '[] t
          , P.Monad m
          , MonCalcShape '[] ~ '[]
          , P.AdditiveInvertible t,IsMonOp Negate c '[] t
@@ -113,7 +113,7 @@ instance ( Operable c '[] t
     cb <- negate b
     binOp Add a cb
 
-instance ( Operable c '[] t
+instance ( DArray c '[] t
          , P.Monad m
          , MonCalcShape '[] ~ '[]
          , P.AdditiveInvertible t,IsMonOp Negate c '[] t
@@ -157,7 +157,7 @@ instance (P.Additive t, P.AdditiveInvertible t, Dim.Dimensions ar) =>
   baseOpMon _ (D v) = D $ P.negate v
   baseOpMon _ (Dm v) = Dm $ P.negate v
 
-instance (Operable c r a) => Trace c Negate r a where
+instance (DArray c r a) => Trace c Negate r a where
   pushAlg (U _ a) dA = P.pure [(SomeD dA, SomeD a)]
 
 class (P.Monad m, IsBinOp c Add (GetShape a) (GetShape b) t, GetShape b ~ '[]) =>
