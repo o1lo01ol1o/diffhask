@@ -76,11 +76,11 @@ addDeltas' ::
   -> ComputationT s a m (D s (BinCalcShape ar br) a)
 addDeltas' a b =
   case (a, b) of
-    (D xa :: D s ar a, D xb :: D s br a) -> a + b
-    (Dm ma :: D s ar a, D xb :: D s br a) -> a .+ b
-    (D xa :: D s ar a, Dm mb :: D s br a) -> a +. b
-    (Dm ma :: D s ar a, Dm mb :: D s br a) ->
-      case checkSame (Dim.dim @br) (Dim.dim @ar) of
+    (D xa , D xb) -> a + b
+    (Dm ma  , D xb) -> a .+ b
+    (D xa  , Dm mb ) -> a +. b
+    (Dm ma  , Dm mb ) ->
+      case checkSame (getDims a) (getDims b) of
         Just Dim.Evidence -> a .+. b
         Nothing ->
           GHC.Err.error
@@ -104,7 +104,7 @@ unsafeAddDeltas ::
   -> ComputationT s a m (D s r a)
 unsafeAddDeltas sa sb =
   case (sa, sb) of
-    (SomeD (a :: D s ar a), SomeD (b :: D s br a)) -> do
+    (SomeD (a  ), SomeD (b )) -> do
       r <- addDeltas' a b
       pure (unsafeCoerce r :: D s r a)
 
@@ -114,20 +114,22 @@ unsafeAddDeltas sa sb =
 --   -> SomeD s a
 --   -> ComputationT s a m (SomeD s a)
 -- addDeltas sa sb =
---   handleAnyD sa $ \ (ca :: D s ar a) ->
---   handleAnyD sb $ \ (cb :: D s br a) -> do
+--   handleAnyD sa $ \ (ca  ) ->
+--   handleAnyD sb $ \ (cb ) -> do
 --      r <- addDeltas' ca cb
 --      pure $ SomeD r
 
   -- case (sa, sb) of
-  --   (SomeD (a :: D s ar a), SomeD (b :: D s br a)) -> do
+  --   (SomeD (a  ), SomeD (b )) -> do
   --     r <- addDeltas' a b
   --     pure $ SomeD r
 
 
-applyDelta ::  (DArray s r a, P.Monad m) => UID
-  ->  SomeD s a
-  ->  (ComputationT s a m (D s r a))
+applyDelta ::
+     (DArray s r a, P.Monad m)
+  => UID
+  -> SomeD s a
+  -> (ComputationT s a m (D s r a))
 applyDelta uniq dlta = do
   st <- get
   let adjs = st ^. adjoints

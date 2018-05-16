@@ -16,7 +16,7 @@ tested-with:         GHC == 8.4.1
 
 library
   hs-source-dirs:      src
-  exposed-modules:     Core, Num, Internal.NumHask.Prelude, Internal.Internal
+  exposed-modules:     Core, FixPoint, Internal.NumHask.Prelude, Internal.Internal
   other-modules:       
                      Internal.NumHask.Algebra
                      , Internal.NumHask.Algebra.Additive

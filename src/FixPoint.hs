@@ -22,20 +22,20 @@ data FixPoint = FixPoint deriving Show
 fpPush ::
      ( Ord a
      , Show a
-     , AdditiveUnital (D r a) r a
-     , MultiplicativeUnital (D r a) r a
-     , Additive (D r a) (D r a) r a
-     , AdditiveModule r (D r a) (D r a) a
-     , AdditiveBasis r (D r a) (D r a) a
-     , Signed (D r a) r a
-     , AdditiveGroup (D r a) (D r a) r a
+     , AdditiveUnital (D c r a) a
+     , MultiplicativeUnital (D c r a) a
+     , Additive (D c r a) (D c r a) a
+     , AdditiveModule r (D c r a) (D c r a) a
+     , AdditiveBasis r (D c r a) (D c r a) a
+     , Signed (D c r a) a
+     , AdditiveGroup (D c r a) (D c r a) a
      )
-  => D r a
-  -> D r a
-  -> D r a
-  -> D r a
-  -> D r a
-  -> Computation r a [(D r a, D r a)]
+  => D c r a
+  -> D c r a
+  -> D c r a
+  -> D c r a
+  -> D c r a
+  -> Computation r a [(D c r a, D c r a)]
 fpPush b bfirst aprev alast dA = do
   reverseProp dA alast
   eps <- gets (\st -> st ^. fpEps)
@@ -47,20 +47,20 @@ fpPush b bfirst aprev alast dA = do
     go ::
          ( Ord a
          , Show a
-         , AdditiveUnital (D r a) r a
-         , MultiplicativeUnital (D r a) r a
-         , Additive (D r a) (D r a) r a
-         , AdditiveModule r (D r a) (D r a) a
-         , AdditiveBasis r (D r a) (D r a) a
-         , Signed (D r a) r a
-         , AdditiveGroup (D r a) (D r a) r a
+         , AdditiveUnital (D c r a) a
+         , MultiplicativeUnital (D c r a) a
+         , Additive (D c r a) (D c r a) a
+         , AdditiveModule r (D c r a) (D c r a) a
+         , AdditiveBasis r (D c r a) (D c r a) a
+         , Signed (D c r a) a
+         , AdditiveGroup (D c r a) (D c r a) a
          )
       => Int
-      -> D r a
+      -> D c r a
       -> Int
-      -> D r a
-      -> D r a
-      -> D r a
+      -> D c r a
+      -> D c r a
+      -> D c r a
       -> Computation r a ()
     go miter eps oi apr alst d =
       let i = oi P.+ 1
@@ -80,13 +80,13 @@ fpPush b bfirst aprev alast dA = do
 
 instance ( Ord a
          , Show a
-         , AdditiveUnital (D r a) r a
-         , MultiplicativeUnital (D r a) r a
-         , Additive (D r a) (D r a) r a
-         , AdditiveModule r (D r a) (D r a) a
-         , AdditiveBasis r (D r a) (D r a) a
-         , Signed (D r a) r a
-     , AdditiveGroup (D r a) (D r a) r a
+         , AdditiveUnital (D c r a) a
+         , MultiplicativeUnital (D c r a) a
+         , Additive (D c r a) (D c r a) a
+         , AdditiveModule r (D c r a) (D c r a) a
+         , AdditiveBasis r (D c r a) (D c r a) a
+         , Signed (D c r a) a
+     , AdditiveGroup (D c r a) (D c r a) a
          ) =>
          Trace FixPoint r a where
   pushEl (FxP _ (b, bfirst, aprev, alast)) = fpPush b bfirst aprev alast
@@ -94,18 +94,18 @@ instance ( Ord a
 
 fixPoint ::
      (Ord a, Trace Noop r a, Show a
-     , AdditiveUnital (D r a) r a
-     , MultiplicativeUnital (D r a) r a
-     , Additive (D r a) (D r a) r a
-     , AdditiveModule r (D r a) (D r a) a
-     , AdditiveBasis r (D r a) (D r a) a
-     , Signed (D r a) r a
-     , AdditiveGroup (D r a) (D r a) r a
-     , AdditiveGroup (D r a) (Computation r a  (D r a)) r a)
-  => (D r a -> D r a -> Computation r a (D r a))
-  -> D r a
-  -> D r a
-  -> Computation r a (D r a)
+     , AdditiveUnital (D c r a) a
+     , MultiplicativeUnital (D c r a) a
+     , Additive (D c r a) (D c r a) a
+     , AdditiveModule r (D c r a) (D c r a) a
+     , AdditiveBasis r (D c r a) (D c r a) a
+     , Signed (D c r a) a
+     , AdditiveGroup (D c r a) (D c r a) a
+     , AdditiveGroup (D c r a) (Computation r a  (D c r a)) r a)
+  => (D c r a -> D c r a -> Computation r a (D c r a))
+  -> D c r a
+  -> D c r a
+  -> Computation r a (D c r a)
 fixPoint g a0 b = do
   eps <- gets (\st -> st ^. fpEps)
   mxitr <- gets (\st -> st ^. maxFpIter)
@@ -117,20 +117,20 @@ fixPoint g a0 b = do
   where
     goD ::
          (Ord a, Show a
-     , AdditiveUnital (D r a) r a
-     , MultiplicativeUnital (D r a) r a
-     , Additive (D r a) (D r a) r a
-     , AdditiveModule r (D r a) (D r a) a
-     , AdditiveBasis r (D r a) (D r a) a
-     , Signed (D r a) r a
-     , AdditiveGroup (D r a) (D r a) r a)
-      => (D r a -> D r a -> Computation r a (D r a))
-      -> D r a
+     , AdditiveUnital (D c r a) a
+     , MultiplicativeUnital (D c r a) a
+     , Additive (D c r a) (D c r a) a
+     , AdditiveModule r (D c r a) (D c r a) a
+     , AdditiveBasis r (D c r a) (D c r a) a
+     , Signed (D c r a) a
+     , AdditiveGroup (D c r a) (D c r a) r a)
+      => (D c r a -> D c r a -> Computation r a (D c r a))
+      -> D c r a
       -> Int
       -> Int
-      -> D r a
-      -> D r a
-      -> Computation r a (D r a)
+      -> D c r a
+      -> D c r a
+      -> Computation r a (D c r a)
     goD g e m i a b =
       let ni = i P.+ 1
       in if ni P.>= m
@@ -144,22 +144,22 @@ fixPoint g a0 b = do
                else goD g e m ni aa b
     goDF ::
          (Ord a, Show a
-     , AdditiveUnital (D r a) r a
-     , MultiplicativeUnital (D r a) r a
-     , Additive (D r a) (D r a) r a
-     , AdditiveModule r (D r a) (D r a) a
-     , AdditiveBasis r (D r a) (D r a) a
-     , Signed (D r a) r a
-     , AdditiveGroup (D r a) (D r a) r a
-     , AdditiveGroup (D r a) (Computation r a  (D r a)) r a)
-      => (D r a -> D r a -> Computation r a (D r a))
-      -> D r a
+     , AdditiveUnital (D c r a) a
+     , MultiplicativeUnital (D c r a) a
+     , Additive (D c r a) (D c r a) a
+     , AdditiveModule r (D c r a) (D c r a) a
+     , AdditiveBasis r (D c r a) (D c r a) a
+     , Signed (D c r a) a
+     , AdditiveGroup (D c r a) (D c r a) a
+     , AdditiveGroup (D c r a) (Computation r a  (D c r a)) r a)
+      => (D c r a -> D c r a -> Computation r a (D c r a))
+      -> D c r a
       -> Int
       -> Int
-      -> D r a
-      -> D r a
+      -> D c r a
+      -> D c r a
       -> Tag
-      -> Computation r a (D r a)
+      -> Computation r a (D c r a)
     goDF g e m i a b bi =
       let ni = i P.+ 1
       in if ni P.>= m
@@ -179,41 +179,41 @@ fixPoint g a0 b = do
                else goDF g e m ni aa b bi
     drFin ::
          (Trace Noop r a, Ord a, Show a
-     , AdditiveUnital (D r a) r a
-     , MultiplicativeUnital (D r a) r a
-     , Additive (D r a) (D r a) r a
-     , AdditiveModule r (D r a) (D r a) a
-     , AdditiveBasis r (D r a) (D r a) a
-     , Signed (D r a) r a
-     , AdditiveGroup (D r a) (D r a) r a)
-      => (D r a -> D r a -> Computation r a (D r a))
-      -> D r a
+     , AdditiveUnital (D c r a) a
+     , MultiplicativeUnital (D c r a) a
+     , Additive (D c r a) (D c r a) a
+     , AdditiveModule r (D c r a) (D c r a) a
+     , AdditiveBasis r (D c r a) (D c r a) a
+     , Signed (D c r a) a
+     , AdditiveGroup (D c r a) (D c r a) r a)
+      => (D c r a -> D c r a -> Computation r a (D c r a))
+      -> D c r a
       -> Tag
-      -> D r a
-      -> D r a
-      -> Computation r a (D r a)
+      -> D c r a
+      -> D c r a
+      -> Computation r a (D c r a)
     drFin g a bi bfirst b = do
       aprev <- r (p a) (N Noop) bi
       alast <- g aprev bfirst
       r (p a) (FxP FixPoint (b, bfirst, aprev, alast)) bi
     goDR ::
          (Ord a, Trace Noop r a, Show a
-     , AdditiveUnital (D r a) r a
-     , MultiplicativeUnital (D r a) r a
-     , Additive (D r a) (D r a) r a
-     , AdditiveModule r (D r a) (D r a) a
-     , AdditiveBasis r (D r a) (D r a) a
-     , Signed (D r a) r a
-     , AdditiveGroup (D r a) (D r a) r a)
-      => (D r a -> D r a -> Computation r a (D r a))
-      -> D r a
+     , AdditiveUnital (D c r a) a
+     , MultiplicativeUnital (D c r a) a
+     , Additive (D c r a) (D c r a) a
+     , AdditiveModule r (D c r a) (D c r a) a
+     , AdditiveBasis r (D c r a) (D c r a) a
+     , Signed (D c r a) a
+     , AdditiveGroup (D c r a) (D c r a) r a)
+      => (D c r a -> D c r a -> Computation r a (D c r a))
+      -> D c r a
       -> Int
       -> Int
-      -> D r a
-      -> D r a
+      -> D c r a
+      -> D c r a
       -> Tag
-      -> D r a
-      -> Computation r a (D r a)
+      -> D c r a
+      -> Computation r a (D c r a)
     goDR g e m i a b bi bfirst =
       let ni = i P.+ 1
       in if ni P.>= m
