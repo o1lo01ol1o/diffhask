@@ -177,20 +177,22 @@ instance (DArray c r a) => Trace c Add r a where
 
 -- | Scalar shape algebra
 
-class (Dim.Dimensions a, Dim.Dimensions b, ScalarAlg a b ~ ScalarAlg b a) =>
+class (Dim.Dimensions a, Dim.Dimensions b) =>
       ScalarAlg a b where
   type ScalarShapeAlg a b :: [Nat]
 
-instance {-# OVERLAPPABLE #-} (Dim.Dimensions a) => ScalarAlg a a where
+instance {-# OVERLAPPABLE #-} (Dim.Dimensions a, IsTensor a) => ScalarAlg a a where
   type ScalarShapeAlg a a = a
 
-instance {-# OVERLAPPABLE  #-} (Dim.Dimensions b, ScalarAlg '[] b ~ ScalarAlg b '[]) => ScalarAlg '[] b where
+instance  {-# OVERLAPS #-} (Dim.Dimensions b) =>
+         ScalarAlg '[] b where
   type ScalarShapeAlg '[] b = b
 
-instance {-# OVERLAPPABLE #-} (Dim.Dimensions a, ScalarAlg a '[] ~ ScalarAlg '[] a) => ScalarAlg a '[] where
+instance {-# OVERLAPS #-}  (Dim.Dimensions a) =>
+         ScalarAlg a '[] where
   type ScalarShapeAlg a '[] = a
 
-instance {-# OVERLAPPING  #-} (Dim.Dimensions '[]) => ScalarAlg '[] '[] where
+instance {-# OVERLAPPING #-}  (Dim.Dimensions '[]) => ScalarAlg '[] '[] where
   type ScalarShapeAlg '[] '[] = '[]
 
 
@@ -222,7 +224,7 @@ data TraceStack c op r a where
     -> D c r a
     -> TraceStack c op (MonCalcShape r) a
   B
-    :: (BinBaseOp op ar br a, DArray c ar a, DArray c br a, ScalarAlg ar br)
+    :: (BinOp c op ar br a, DArray c ar a, DArray c br a)
     => op
     -> D c ar a
     -> D c br a
@@ -515,7 +517,8 @@ type IsBinOp c op ar br a
      , DArray c (ScalarShapeAlg ar br) a)
 
 
-instance (IsBinOp c Add ar br a) => BinOp c Add ar br a
+
+instance (IsBinOp c Add ar br a, ScalarAlg br ar ~ ScalarAlg ar br) => BinOp c Add ar br a
 
 instance (P.Additive t) => BinBaseOp Add ar br t where
   type BinCalcShape ar br = ScalarShapeAlg ar br
@@ -581,7 +584,6 @@ class ( Show op
     -> (D c br a)
     -> ComputationT c a m (D c (BinCalcShape ar br) a)
   binOp = binOp'
-
 
 
 {-# inline binOp' #-}

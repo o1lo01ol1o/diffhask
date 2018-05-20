@@ -76,10 +76,10 @@ addDeltas' ::
   -> ComputationT s a m (D s (BinCalcShape ar br) a)
 addDeltas' a b =
   case (a, b) of
-    (D xa , D xb) -> a + b
-    (Dm ma  , D xb) -> a .+ b
-    (D xa  , Dm mb ) -> a +. b
-    (Dm ma  , Dm mb ) ->
+    (D xa, D xb) -> a + b
+    (Dm ma, D xb) -> a .+ b
+    (D xa, Dm mb) -> a +. b
+    (Dm ma, Dm mb) ->
       case checkSame (getDims a) (getDims b) of
         Just Dim.Evidence -> a .+. b
         Nothing ->

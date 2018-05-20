@@ -102,6 +102,7 @@ instance (DArray c r a) => Trace c Recip r a where
 class ( P.Monad m
       , BinOp c Multiply (GetShape a) (GetShape b) t
       , MultiplicativeMagma m c a b t
+      
       ) =>
       Multiplicative m c a b t where
   infixl 7 *
@@ -131,6 +132,7 @@ class ( P.Monad m
 class ( IsBinOp c Divide (GetShape a) (GetShape b) t
       , P.Monad m
       , BinOp c Multiply (GetShape a) (GetShape b) t
+      
       ) =>
       MultiplicativeGroup m c a b t where
   infixl 7 /
@@ -189,6 +191,7 @@ instance ( P.Additive t
          , P.Multiplicative t
          , Dim.Dimensions ar
          , Dim.Dimensions br
+         , ScalarAlg ar br ~ ScalarAlg br ar
          ) =>
          BinBaseOp Multiply ar br t where
   type BinCalcShape ar br = ScalarShapeAlg ar br
@@ -218,6 +221,7 @@ instance ( DArray s ar a
 
 instance ( DfOperable Multiply c ar br t
          , BinOp c Multiply ar br t
+         , ScalarAlg ar br ~ ScalarAlg br ar
          , P.AdditiveInvertible t
          , P.MultiplicativeGroup t
          ) =>
@@ -230,6 +234,7 @@ instance ( DfOperable Multiply c ar br t
 
 instance ( DfOperable Multiply c ar br a
          , BinOp c Multiply br ar a
+         , ScalarAlg ar br ~ ScalarAlg br ar
          , P.AdditiveInvertible a
          , P.MultiplicativeGroup a
          ) =>
@@ -253,6 +258,7 @@ instance ( DfOperable Divide c ar br t
 instance ( DfOperable Divide c ar br t
          , P.Multiplicative t
          , P.AdditiveInvertible t
+         , ScalarAlg ar br ~ ScalarAlg br ar
          ,  P.AdditiveInvertible t, P.MultiplicativeGroup t
          ) =>
          DfDbBin c Divide ar br t where
@@ -271,6 +277,7 @@ instance ( DfOperable Divide c ar br t
          , IsBinOp c Divide br br t
          , P.Multiplicative t
          , P.AdditiveInvertible t
+         , ScalarAlg ar br ~ ScalarAlg br ar
          , P.MultiplicativeGroup t
          ) =>
          DfBin c Divide ar br t where
@@ -288,7 +295,7 @@ instance ( DArray c r t, P.Multiplicative t, P.AdditiveInvertible t, P.Multiplic
   pushAlg (B _ a b) dA
     -- cdA <- pure dA
    = do
-    opa <- dA * (p b)
+    opa <- binOp Multiply dA (p b)
     opb <- dA * (p a)
     arga <- dA * b
     argb <- dA * a
@@ -303,7 +310,7 @@ instance (DArray c r t, P.Multiplicative t,  P.MultiplicativeGroup t
          , P.AdditiveInvertible t) => Trace c Divide r t where
   pushAlg (B _ a b) dA = do
     -- cdA <- pure dA
-    opa <-  dA / p b -- binOp Divide dA (p b) --
+    opa <-   binOp Divide dA (p b) -- dA / p b -- binOp Divide dA (p b) --
     pa' <- (negate (p a))
     a'b' <- (binOp Divide pa' (p b)) * p b
     opb <- binOp Multiply dA a'b'
@@ -320,6 +327,7 @@ instance ( P.Multiplicative t
          , P.MultiplicativeGroup t
          , P.AdditiveInvertible t
          , DfOperable Multiply c ar br t
+         
          ) =>
          BinOp c Multiply ar br t
 
@@ -327,6 +335,7 @@ instance ( P.Multiplicative t
          , P.MultiplicativeGroup t
          , P.AdditiveInvertible t
          , DfOperable Divide c ar br t
+         , ScalarAlg ar br ~ ScalarAlg br ar
          ) =>
          BinOp c Divide ar br t
 
@@ -348,6 +357,7 @@ instance ( P.Monad m
          , DfOperable Multiply c ar br t
          , P.AdditiveInvertible t
          , P.MultiplicativeGroup t
+         , ScalarAlg ar br ~ ScalarAlg br ar
          ) =>
          Multiplicative m c (D c ar t) (D c br t) t
 
@@ -355,6 +365,7 @@ instance ( P.Monad m
          , DfOperable Multiply c ar br t
          , P.AdditiveInvertible t
          , P.MultiplicativeGroup t
+         , ScalarAlg ar br ~ ScalarAlg br ar
          ) =>
          Multiplicative m c (D c ar t) (ComputationT c t m (D c br t)) t
 
@@ -362,6 +373,7 @@ instance ( P.Monad m
          , DfOperable Multiply c ar br t
          , P.AdditiveInvertible t
          , P.MultiplicativeGroup t
+         , ScalarAlg ar br ~ ScalarAlg br ar
          ) =>
          Multiplicative m c (ComputationT c t m (D c ar t)) (D c br t) t
 
@@ -369,6 +381,7 @@ instance ( P.Monad m
          , DfOperable Multiply c ar br t
          , P.AdditiveInvertible t
          , P.MultiplicativeGroup t
+         , ScalarAlg ar br ~ ScalarAlg br ar
          ) =>
          Multiplicative m c (ComputationT c t m (D c ar t)) (ComputationT c t m (D c br t)) t
 
@@ -376,6 +389,7 @@ instance ( P.Monad m
          , DfOperable Multiply c ar br t
          , P.AdditiveInvertible t
          , P.MultiplicativeGroup t
+         , ScalarAlg ar br ~ ScalarAlg br ar
          ) =>
          MultiplicativeGroup m c (D c ar t) (D c br t) t
 
@@ -383,6 +397,7 @@ instance ( P.Monad m
          , DfOperable Multiply c ar br t
          , P.AdditiveInvertible t
          , P.MultiplicativeGroup t
+         , ScalarAlg ar br ~ ScalarAlg br ar
          ) =>
          MultiplicativeGroup m c (D c ar t) (ComputationT c t m (D c br t)) t
 
@@ -390,6 +405,7 @@ instance ( P.Monad m
          , DfOperable Multiply c ar br t
          , P.AdditiveInvertible t
          , P.MultiplicativeGroup t
+         , ScalarAlg ar br ~ ScalarAlg br ar
          ) =>
          MultiplicativeGroup m c (ComputationT c t m (D c ar t)) (D c br t) t
 
@@ -397,6 +413,7 @@ instance ( P.Monad m
          , DfOperable Multiply c ar br t
          , P.AdditiveInvertible t
          , P.MultiplicativeGroup t
+         , ScalarAlg ar br ~ ScalarAlg br ar
          ) =>
          MultiplicativeGroup m c (ComputationT c t m (D c ar t)) (ComputationT c t m (D c br t)) t
 
@@ -419,6 +436,7 @@ instance ( P.Monad m
          , DfOperable Multiply c r '[] t
          , P.AdditiveInvertible t
          , P.MultiplicativeGroup t
+         , ScalarAlg r '[] ~ ScalarAlg '[] r
          ) =>
          MultiplicativeModule m c (D c r t) (D c '[] t) t where
   (.*) a b = binOp Multiply a b
@@ -429,6 +447,7 @@ instance ( P.Monad m
          , m ~ m'
          , P.AdditiveInvertible t
          , P.MultiplicativeGroup t
+         , ScalarAlg r '[] ~ ScalarAlg '[] r
          ) =>
          MultiplicativeModule m c (D c r t) (ComputationT c t m' (D c '[] t)) t where
   (.*) a b = do
@@ -443,6 +462,7 @@ instance ( P.Monad m
          , m ~ m'
          , P.AdditiveInvertible t
          , P.MultiplicativeGroup t
+         , ScalarAlg r '[] ~ ScalarAlg '[] r
          ) =>
          MultiplicativeModule m c (ComputationT c t m' (D c r t)) (D c '[] t) t where
   (.*) a b = do
@@ -458,6 +478,7 @@ instance ( P.Monad m
          , m' ~ m''
          , P.AdditiveInvertible t
          , P.MultiplicativeGroup t
+         , ScalarAlg r '[] ~ ScalarAlg '[] r
          ) =>
          MultiplicativeModule m c (ComputationT c t m' (D c r t)) (ComputationT c t m'' (D c '[] t)) t where
   (.*) a b = do

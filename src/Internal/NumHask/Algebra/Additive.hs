@@ -70,7 +70,6 @@ instance (DArray c '[] t, P.Monad m, m ~ m', m ~ m'') =>
     cb <- b
     binOp Add ca cb
 
-
 class ( DArray c '[] t
       , P.Monad m
       , MonCalcShape '[] ~ '[]
@@ -173,7 +172,7 @@ class (P.Monad m, IsBinOp c Add (GetShape a) (GetShape b) t, GetShape b ~ '[]) =
     -> a
     -> ComputationT c t m (D c (BinCalcShape (GetShape a) (GetShape b)) t)
 
-instance (P.Monad m, IsBinOp c Add ar '[] t, m ~ m') =>
+instance (P.Monad m, IsBinOp c Add ar '[] t, m ~ m', ScalarAlg ar '[] ~ ScalarAlg '[] ar) =>
          AdditiveModule m c (ComputationT c t m' (D c ar t)) (D c '[] t) t where
   (.+) a b = do
     ca <- a
@@ -182,7 +181,7 @@ instance (P.Monad m, IsBinOp c Add ar '[] t, m ~ m') =>
     ca <- a
     binOp Add ca b
 
-instance (P.Monad m, IsBinOp c Add ar '[] t, m ~ m', m ~ m'') =>
+instance (P.Monad m, IsBinOp c Add ar '[] t, m ~ m', m ~ m'', ScalarAlg ar '[] ~ ScalarAlg '[] ar) =>
          AdditiveModule m c (ComputationT c t m' (D c ar t)) (ComputationT c t m'' (D c '[] t)) t where
   (.+) a b = do
     ca <- a
@@ -193,12 +192,12 @@ instance (P.Monad m, IsBinOp c Add ar '[] t, m ~ m', m ~ m'') =>
     cb <- b
     binOp Add cb ca
 
-instance (P.Monad m, IsBinOp c Add ar '[] t) =>
+instance (P.Monad m, IsBinOp c Add ar '[] t, ScalarAlg ar '[] ~ ScalarAlg '[] ar) =>
          AdditiveModule m c (D c ar t) (D c '[] t) t where
   (.+) a b = binOp Add a b
   (+.) a b = binOp Add b a
 
-instance (P.Monad m, IsBinOp c Add ar '[] t,m ~ m') =>
+instance (P.Monad m, IsBinOp c Add ar '[] t,m ~ m', ScalarAlg ar '[] ~ ScalarAlg '[] ar) =>
          AdditiveModule m c (D c ar t) (ComputationT c t m' (D c '[] t)) t where
   (.+) a b = do
     cb <- b
@@ -230,6 +229,7 @@ instance ( P.Monad m
          , IsMonOp Negate c '[] t
          , IsBinOp c Add ar '[] t
          , P.AdditiveInvertible t,MonCalcShape '[] ~ '[]
+         , ScalarAlg ar '[] ~ ScalarAlg '[] ar
          ) =>
          AdditiveGroupModule m c (D c ar t) (D c '[] t) t where
   (.-) a b = do
@@ -244,6 +244,7 @@ instance ( P.Monad m
          , IsMonOp Negate c '[] t
          , IsBinOp c Add ar '[] t
          , P.AdditiveInvertible t,MonCalcShape '[] ~ '[]
+         , ScalarAlg ar '[] ~ ScalarAlg '[] ar
          , m ~ m'
          ) =>
          AdditiveGroupModule m c (D c ar t) (ComputationT c t m' (D c '[] t)) t where
@@ -262,6 +263,7 @@ instance ( P.Monad m
          , IsBinOp c Add ar '[] t
          , P.AdditiveInvertible t,MonCalcShape '[] ~ '[]
          , m ~ m'
+         , ScalarAlg ar '[] ~ ScalarAlg '[] ar
          ) =>
          AdditiveGroupModule m c (ComputationT c t m (D c ar t)) (D c '[] t) t where
   (.-) a b = do
@@ -280,6 +282,7 @@ instance ( P.Monad m
          , P.AdditiveInvertible t,MonCalcShape '[] ~ '[]
          , m ~ m'
          , m ~ m''
+         , ScalarAlg ar '[] ~ ScalarAlg '[] ar
          ) =>
          AdditiveGroupModule m c (ComputationT c t m' (D c ar t)) (ComputationT c t m'' (D c '[] t)) t where
 
