@@ -13,7 +13,6 @@
 {-# LANGUAGE OverloadedLists            #-}
 {-# LANGUAGE PolyKinds                  #-}
 {-# LANGUAGE RankNTypes                 #-}
-{-# LANGUAGE TemplateHaskell            #-}
 {-# LANGUAGE TypeFamilies               #-}
 {-# LANGUAGE TypeOperators               #-}
 {-# LANGUAGE TypeFamilyDependencies     #-}
@@ -22,18 +21,20 @@
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE UndecidableInstances       #-}
 {-# LANGUAGE UndecidableSuperClasses       #-}
-{-# OPTIONS_GHC -freduction-depth=10000 #-}
+-- # LANGUAGE IncoherentInstances       #
+
 module Internal.Internal (module Internal.Internal) where
 import Control.Monad.State.Strict (StateT, get, put)
 import qualified Data.Map                   as M 
 import           GHC.Err
 import           GHC.Exts                   (Item (..))
 import           GHC.Show
-import           Lens.Micro                 ((&), (.~), (^.))
-import           Lens.Micro.TH              (makeLenses)
+import           Lens.Micro                 ((&), (.~), (^.), Lens')
 import qualified Numeric.Dimensions         as Dim
+
 import           NumHask.Array              ()
 import qualified NumHask.Array              as A
+import           Unsafe.Coerce              (unsafeCoerce)
 
 import NumHask.Prelude hiding (Show, State, StateT, show)
 import qualified NumHask.Prelude            as P
@@ -67,8 +68,6 @@ type DArray c (r :: [Nat]) a
      , P.Foldable c
      , P.MultiplicativeUnital a
      , Dim.Dimensions r
-    -- , Show (D c r a)
-     --, Show (A.Array c '[] a)
      , A.Container c
      , Show a
      , Show (Item (c a))
@@ -84,15 +83,11 @@ type WrappedOperable c a
      , Show a
      , Item (c a) ~ a
      , Show (Item (c a))
-     , IsList (c a)
-     )
+     , IsList (c a))
   
 data D c r a where
   D :: (DArray c '[] a) => a -> D c '[] a
-  Dm
-    :: (DArray c r a)
-    => A.Array c r a
-    -> D c r a
+  Dm :: (DArray c r a, IsTensor r) => A.Array c r a -> D c r a
   DF :: (DArray c r a) => Primal c r a -> Tangent c r a -> Tag -> D c r a
   DR
     :: (Show op, Trace c op r a, DArray c r a)
@@ -121,16 +116,20 @@ type family GetShape a where
   GetShape (D c r a) = r
   GetShape (ComputationT _ _ _ (D c r a)) = r
 
-type family IsTensor' a where
-  IsTensor' '[] = 'False
-  IsTensor'  n = 'True
+type family IsTensor' (a:: [Nat]) where
+  IsTensor' '[]= 'False
+  IsTensor'  (Dim.Cons n ns) = 'True
 
-type family IsScalar' a where
+type family IsScalar' (a :: [Nat]) where
   IsScalar' '[] = 'True
-  IsScalar' n = 'False
+  IsScalar' (Dim.Cons n ns) = 'False
 
-type IsScalar a = ('[] ~ a)
+type IsScalar (a) = ('[] ~ a)
 type IsTensor a = (IsTensor' a ~ 'True)
+
+inferTensor :: Dim.Dim ns -> Maybe (Dim.Evidence (IsTensor ns))
+inferTensor (_ Dim.:* _) = Just Dim.Evidence
+inferTensor _ = Nothing
 
 instance (Show UID, Show (A.Array c r a)) => Show (D c r a) where
   show (D a)            = "D " ++ P.show a
@@ -148,18 +147,17 @@ dmToDs_ (Dm (A.Array ar)) = fmap D (P.toList ar)
 dmToDs_ a = GHC.Err.error $ "dmToDs_ should have recived a tensor! " ++ show a
 
 
-class ( DArray c r a
-      ) =>
+class (DArray c r a) =>
       Trace c op r a where
   resetAlg :: (Monad m) => TraceStack c op r a -> ComputationT c a m [SomeD c a]
   resetAlg (U _ a) = pure [SomeD a]
   resetAlg (B _ a b) = pure [SomeD a, SomeD b, SomeD a, SomeD b]
   resetAlg (IxU _ a _) = pure [SomeD a]
-  pushAlg ::
+  pushAlg :: 
        (Monad m)
     => TraceStack c op r a
     -> D c r a
-    -> ComputationT c a m [(SomeD c a, SomeD c a)] -- (delta, node) 
+    -> ComputationT c a m [(SomeD c a, SomeD c a)] -- (delta, node)
   {-# MINIMAL (resetAlg, pushAlg) #-}
 
 
@@ -173,28 +171,52 @@ instance (DArray c r a, IsTensor r) => Trace c MkDm_of_Ds r a where
       (dmToDs_ dA) -- dA must be a tensor if it's to necessary to broadcast a scalar to match it's dimension.
 
 instance (DArray c r a) => Trace c Add r a where
-  pushAlg (B _ a b) dA = pure [( SomeD dA, SomeD a), (SomeD dA, SomeD b), (SomeD dA, SomeD a), (SomeD dA, SomeD b)]
+  pushAlg (B _ a b) dA =
+    pure
+      [ (SomeD dA, SomeD a)
+      , (SomeD dA, SomeD b)
+      , (SomeD dA, SomeD a)
+      , (SomeD dA, SomeD b)
+      ]
 
 -- | Scalar shape algebra
 
-class (Dim.Dimensions a, Dim.Dimensions b) =>
-      ScalarAlg a b where
-  type ScalarShapeAlg a b :: [Nat]
+class (Dim.Dimensions ar, Dim.Dimensions br
+      ) =>
+      ScalarAlg (ar) (br) where
+  type ScalarShapeAlg ar br :: [Nat]
+  scalarAlg ::
+       (DArray c ar t, DArray c br t)
+    => (D c ar t -> D c br t -> ComputationT c t m (D c cr t))
+    -> D c ar t
+    -> D c br t
+    -> ComputationT c t m (D c cr t)
+  scalarAlg f da db =
+    case (da, db) of
+      (D a, Dm b) -> f (D a) (Dm b)
+      (Dm a, D b) -> f (Dm a) (D b)
+      _ -> sameOrError f da db
 
-instance {-# OVERLAPPABLE #-} (Dim.Dimensions a, IsTensor a) => ScalarAlg a a where
+instance {-# OVERLAPPING #-} (Dim.Dimensions a, IsTensor a) =>
+         ScalarAlg (a :: [Nat]) (a :: [Nat]) where
   type ScalarShapeAlg a a = a
 
-instance  {-# OVERLAPS #-} (Dim.Dimensions b) =>
-         ScalarAlg '[] b where
+instance  {-# OVERLAPS #-}  ( Dim.Dimensions b
+         -- , ScalarAlg (ScalarShapeAlg '[] b) b
+         -- , ScalarAlg '[] (ScalarShapeAlg '[] b)
+         ) =>
+         ScalarAlg ('[] :: [Nat]) (b :: [Nat]) where
   type ScalarShapeAlg '[] b = b
 
-instance {-# OVERLAPS #-}  (Dim.Dimensions a) =>
+instance {-# OVERLAPS #-}  ( Dim.Dimensions a
+         -- , ScalarAlg (ScalarShapeAlg a '[]) '[]
+         -- , ScalarAlg a (ScalarShapeAlg a '[])
+         ) =>
          ScalarAlg a '[] where
   type ScalarShapeAlg a '[] = a
 
-instance {-# OVERLAPPING #-}  (Dim.Dimensions '[]) => ScalarAlg '[] '[] where
+instance {-# OVERLAPPING #-} (Dim.Dimensions '[]) => ScalarAlg '[] '[] where
   type ScalarShapeAlg '[] '[] = '[]
-
 
 
 
@@ -215,11 +237,16 @@ unsafeMkDfromDmAt dm i = case dm of
   Dm (A.Array m) ->  D $  m `A.idx` i
   _ -> GHC.Err.error $  "unsafeMkDfromDmAt was called on an edge that was not a Dm! " ++ (show dm)
 
+-- type BinOpExtras c ar br a
+--    = ( ScalarAlg ar br  -- ~ ScalarAlg ar br
+--        , ScalarAlg (ScalarShapeAlg ar br) br
+--        , ScalarAlg ar (ScalarShapeAlg ar ar) 
+--      ) -- Put all Trace- related constraints here.
 
 data TraceStack c op r a where
   N :: (DArray c r a) => op -> TraceStack c op r a
   U
-    :: (MonBaseOp op r a, DArray c r a)
+    :: (MonOp c op r a, DArray c r a)
     => op
     -> D c r a
     -> TraceStack c op (MonCalcShape r) a
@@ -231,8 +258,7 @@ data TraceStack c op r a where
     -> TraceStack c op (BinCalcShape ar br) a
   IxU :: (DArray c r a) => op -> D c r a -> [Int] -> TraceStack c op r a
   FxP :: (DArray c r a) => op -> FptNode c r a -> TraceStack c op r a
-  MkDm_of_Ds
-    :: (DArray c r a) => [D c '[] a] -> TraceStack c MkDm_of_Ds r a
+  MkDm_of_Ds :: (DArray c r a) => [D c '[] a] -> TraceStack c MkDm_of_Ds r a
 
 instance (Show op, DArray c r a) => Show (TraceStack c op r a) where
   show (N o) = "N " ++ show o
@@ -250,8 +276,29 @@ newtype Tag  = Tag Int deriving (Eq, Ord, Show)
 newtype UID = UID Int
   deriving (Eq, Ord, Show)
 
-makeLenses ''ComputationState
+nextTag :: Lens' (ComputationState c a) Tag
+nextTag wrap (ComputationState nextTag nu a f fe mf) =
+  fmap (\newnt -> ComputationState newnt nu a f fe mf) (wrap nextTag)
 
+nextUID :: Lens' (ComputationState c a) UID
+nextUID wrap (ComputationState nt nextUID a f fe mf) =
+  fmap (\newnu -> ComputationState nt  newnu a f fe mf) (wrap nextUID)
+
+adjoints :: Lens' (ComputationState c a) (Adjoints c a)
+adjoints wrap (ComputationState nt nu adjoints f fe mf) =
+  fmap (\new -> ComputationState nt nu new f fe mf) (wrap adjoints)
+
+fanouts :: Lens' (ComputationState c a) Fanouts
+fanouts wrap (ComputationState nt nu a fanouts fe mf) =
+  fmap (\new -> ComputationState nt nu a new fe mf) (wrap fanouts)
+
+fpEps :: Lens' (ComputationState c a) a
+fpEps wrap (ComputationState nt nu a f fpEps mf) =
+  fmap (\new -> ComputationState nt nu a f new mf) (wrap fpEps)
+
+maxFpIter :: Lens' (ComputationState c a) Int
+maxFpIter wrap (ComputationState nt nu a f fe maxFpIter) =
+  fmap (\new -> ComputationState nt nu a f fe new) (wrap maxFpIter)
 
 getNextTag :: (Monad m) => ComputationT c a m (Tag)
 getNextTag = do
@@ -328,23 +375,27 @@ toNumericScalar d =
     _ -> GHC.Err.error "Impossible! Deepest primal of an argument toNumericScalar was not a scalar!"
 
 
-instance (DArray c r a) =>
-         IsList (D c r a) where
+instance (DArray c r a) => IsList (D c r a) where
   type Item (D c r a) = a
-  fromList l = Dm (A.Array . fromList $ l)
+  fromList l@(_:_) =
+    case inferTensor (Dim.dim @r) of
+      Just Dim.Evidence -> Dm $ (A.Array . fromList $ l)
+  fromList (x:[]) =
+    case Dim.sameDim (Dim.dim @r) (Dim.dim @('[] :: [Nat])) of
+      Just Dim.Evidence -> D x
   toList (Dm v) = GHC.Exts.toList v
   toList (D v) = [v]
-  -- FIXME: resolve what to do here with other cases.
+
 
 ofList_ ::
-     forall c r a m. (Trace c MkDm_of_Ds r a, P.Monad m)
+     forall c r a m. (Trace c MkDm_of_Ds r a, P.Monad m, IsTensor r)
   => Proxy r
   -> [D c '[] a]
   -> ComputationT c a m (D c r a)
 ofList_ pr l@(a:_) =
   case a of
     D _ -> pure $ fromList sc
-    Dm _ -> pure . Dm $ fromList sc
+    -- Dm _ -> pure . Dm $ fromList sc
     DF _ _ ai -> do
       cap <- ofList_ pr ap
       cat <- ofList_ pr at
@@ -409,7 +460,7 @@ type BTangent c r a = Tangent c r a
 
 class (DfOperable op c ar br a) =>
       DfDaBin c op ar br a where
-  type DfDaShape ar br :: [Nat]
+  --type DfDaShape ar br :: [Nat]
   df_da ::
        (Monad m)
     => op
@@ -417,14 +468,14 @@ class (DfOperable op c ar br a) =>
     -> CPrimal c (BinCalcShape ar br) a
     -> BPrimal c ar a
     -> BTangent c ar a
-    -> ComputationT c a m (D c (DfDaShape ar br) a)
+    -> ComputationT c a m (D c (BinCalcShape ar br) a)
 
 scalarToTensorLike ::
-     (DArray c t a, Monad m)
+     (DArray c t a, Monad m, IsTensor t)
   => D c '[] a
   -> Proxy t
   -> ComputationT c a m (D c t a)
-scalarToTensorLike (D v) _ = pure . fromList $ repeat v
+scalarToTensorLike (D v) _ = pure . Dm . fromList $ repeat v
 
 sameOrError ::
      (DArray c ar a, DArray c br a)
@@ -439,26 +490,37 @@ sameOrError f (da :: D c ar a) (db :: D c br a) =
       GHC.Err.error $
       "Expected dimensions to be the same!  This should be impossible: Please report this as a bug in diffhask! Values:" ++
       show da ++ "  " ++ show db
-      
+
+
+
+    
 handleScalarBroadcast ::
-     (P.Monad m)
-  => (D c ar a -> Tangent c br a -> ComputationT c a m (D c cr a))
+     (P.Monad m, ScalarAlg ar br)
+  => (D c (ScalarShapeAlg ar br) a -> Tangent c (ScalarShapeAlg ar br) a -> ComputationT c a m (D c (ScalarShapeAlg ar br) a))
   -> D c ar a
   -> Tangent c br a
-  -> ComputationT c a m (D c cr a)
+  -> ComputationT c a m (D c (ScalarShapeAlg ar br) a)
 handleScalarBroadcast f a t =
   case (a, t) of
+    (D _, D _ ) -> f a t
     (Dm _, D _) -> do
       ct <- scalarToTensorLike t (Proxy :: Proxy ar)
       f a ct
     (D _, Dm _) -> do
       ca <- scalarToTensorLike a (Proxy :: Proxy br)
       f ca t
-    (Dm _, Dm _) -> sameOrError f a t
+    (Dm da :: D c ar a, Dm dt :: Tangent c br a) ->
+      case Dim.sameDim (Dim.dim @ar) (Dim.dim @br) of
+        Just Dim.Evidence -> f (Dm da) (Dm dt)
+        _ ->
+          GHC.Err.error $
+          "Expected dimensions to be the same!  This should be impossible: Please report this as a bug in diffhask! Values:" ++
+          show da ++ "  " ++ show dt
 
 class (DfOperable op c ar br a) =>
-      DfDbBin c op ar br a where
-  type DfDbShape ar br :: [Nat]
+      DfDbBin c op ar br a
+  --type DfDbShape ar br :: [Nat]
+                                  where
   df_db ::
        (Monad m)
     => op
@@ -474,7 +536,7 @@ type DfOperable op c ar br a
 
 instance (DfOperable Add c ar br a) =>
          DfDbBin c Add ar br a where
-  type DfDbShape ar br = ScalarShapeAlg ar br -- IfScalarThenMkTensor' br ar
+  --type DfDbShape ar br = ScalarShapeAlg ar br -- IfScalarThenMkTensor' br ar
   {-# INLINE df_db #-}
   df_db _ a _ _ bt =
     case (a, bt) of
@@ -489,9 +551,9 @@ instance (DfOperable Add c ar br a) =>
             show bt ++ "  " ++ show a
 
 
-instance (DArray c ar a, DArray c br a, IsBinOp c Add ar br a) =>
+instance (DArray c ar a, DArray c br a, IsBinOp c Add ar br a, ScalarAlg ar br) =>
          DfDaBin c Add ar br a where
-  type DfDaShape ar br = ScalarShapeAlg ar br
+  --type DfDaShape ar br = ScalarShapeAlg ar br
   {-# INLINE df_da #-}
   df_da _ b _ _ at =
     case (b, at) of
@@ -511,14 +573,18 @@ type IsBinOp c op ar br a
      , BinBaseOp op ar br a
      , Trace c op ar a
      , Trace c op br a
-     , ScalarAlg ar br
      , Trace c op (BinCalcShape ar br) a
      , DArray c (BinCalcShape ar br) a
-     , DArray c (ScalarShapeAlg ar br) a)
+     --, DArray c (ScalarShapeAlg ar br) a
+     )
 
 
 
-instance (IsBinOp c Add ar br a, ScalarAlg br ar ~ ScalarAlg ar br) => BinOp c Add ar br a
+instance ( IsBinOp c Add ar br a
+         , ScalarAlg ar br
+         --, BinOp c Add (BinCalcShape ar br) br a ~ BinOp c Add ar (BinCalcShape ar br) a
+         ) =>
+         BinOp c Add ar br a
 
 instance (P.Additive t) => BinBaseOp Add ar br t where
   type BinCalcShape ar br = ScalarShapeAlg ar br
@@ -565,6 +631,8 @@ class (DArray c ar t, DArray c br t) =>
     -> (D c br t)
     -> (D c br t)
     -> ComputationT c t m (D c (BinCalcShape ar br) t)
+
+
 
 class ( Show op
       , BinBaseOp op ar br a
@@ -614,9 +682,9 @@ binOp' op a@(D ap) (DF bp bt bi) = do
   cdf <- df_db op a cp bp bt
   pure $ DF cp cdf bi
 
-binOp' op a@(D ap) b@(DR bp _ bi _) = do
+binOp' op a@(D ap :: D c ar a) b@(DR bp _bt bi _btt :: D c br a) = do
   cfd <- fd_bin op a bp
-  r (cfd) (B op a b) bi
+  r (cfd) (B op (D ap) (DR bp _bt bi _btt)) bi
 
 binOp' op a@(Dm ap) b@(D bp) = pure $ baseOpBin op a b
 
@@ -697,3 +765,4 @@ binOp' op a@(DR ap _ ai _) b@(DR bp _ bi _) =
     GT -> do
       fdab <- fd_bin op ap b
       r (fdab) (B op a b) ai
+

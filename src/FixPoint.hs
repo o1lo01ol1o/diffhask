@@ -5,7 +5,7 @@
 {-# LANGUAGE NoImplicitPrelude     #-}
 {-# LANGUAGE TypeFamilies          #-}
 {-# LANGUAGE UndecidableInstances  #-}
-module Num (module Num) where
+module FixPoint (module FixPoint) where
 import           Control.Monad.State.Strict (State, get, gets, join, liftM,
                                              liftM2, modify, put, (>=>))
 import           Core

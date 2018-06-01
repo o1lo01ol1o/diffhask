@@ -10,6 +10,7 @@
 {-# LANGUAGE Rank2Types            #-}
 {-# LANGUAGE ScopedTypeVariables   #-}
 {-# LANGUAGE TypeApplications      #-}
+{-# LANGUAGE ScopedTypeVariables    #-}
 {-# LANGUAGE TypeFamilies          #-}
 {-# LANGUAGE TypeOperators         #-}
 {-# LANGUAGE UndecidableInstances  #-}
@@ -46,8 +47,12 @@ one ::(DArray s '[] a) => D s '[] a
 one = D P.one
 
 
-zeros :: (DArray s r a) => D s r a
-zeros = fromList $ repeat P.zero
+zeros :: forall s r a. (DArray s r a) => D s r a
+zeros =
+  let (p :: Proxy r) = (Proxy :: Proxy r)
+  in case Dim.sameDim (Dim.dim @r) (Dim.dim @('[] :: [Nat])) of
+       Just Dim.Evidence -> zero :: D s r a
+       Nothing -> (fromList $ repeat P.zero) :: D s r a
 
 ones :: (DArray s r a) => D s r a
 ones = fromList $ repeat P.one
@@ -57,7 +62,7 @@ initComp :: forall a r. (P.Fractional a) => ComputationState r a
 initComp = ComputationState (Tag 0) (UID 0) M.empty M.empty (1e-6 :: a) (P.sum $ P.replicate 1000 1)
 
 
-mkForward :: (DArray s r a) => Tag -> Tangent s r a -> Primal s r a  -> D s r a
+mkForward :: (DArray s r a) => Tag -> Tangent s r a -> Primal s r a -> D s r a
 mkForward i tg d  = DF d tg i
 
 
@@ -229,7 +234,9 @@ pushit o dA xs = do
   push $ pd `mappend` xs
 
 -- recursively pushes nodes onto the reverse mode stack and composes partials at node
-push :: (P.Monad m, WrappedOperable s a) => [(SomeD s a, SomeD s a)]
+push ::
+     (P.Monad m, WrappedOperable s a)
+  => [(SomeD s a, SomeD s a)]
   -> ComputationT s a m ()
 push l =
   case l of
