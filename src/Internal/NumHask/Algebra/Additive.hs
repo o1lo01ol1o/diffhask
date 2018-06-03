@@ -259,7 +259,7 @@ instance ( P.Monad m
          , IsBinOp c Add ar '[] t
          , P.AdditiveInvertible t,MonCalcShape '[] ~ '[]
          , m ~ m'
-         , ScalarAlg ar '[] ~ ScalarAlg '[] ar
+          
          , IsTensor ar) =>
          AdditiveGroupModule m c (ComputationT c t m (D c ar t)) (D c '[] t) t where
   (.-) a b = do
@@ -278,7 +278,7 @@ instance ( P.Monad m
          , P.AdditiveInvertible t,MonCalcShape '[] ~ '[]
          , m ~ m'
          , m ~ m''
-         , ScalarAlg ar '[] ~ ScalarAlg '[] ar
+        
          , IsTensor ar) =>
          AdditiveGroupModule m c (ComputationT c t m' (D c ar t)) (ComputationT c t m'' (D c '[] t)) t where
 

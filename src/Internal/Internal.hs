@@ -181,43 +181,10 @@ instance (DArray c r a) => Trace c Add r a where
 
 -- | Scalar shape algebra
 
-class (Dim.Dimensions ar, Dim.Dimensions br
-      ) =>
-      ScalarAlg (ar) (br) where
-  type ScalarShapeAlg ar br :: [Nat]
-  scalarAlg ::
-       (DArray c ar t, DArray c br t)
-    => (D c ar t -> D c br t -> ComputationT c t m (D c cr t))
-    -> D c ar t
-    -> D c br t
-    -> ComputationT c t m (D c cr t)
-  scalarAlg f da db =
-    case (da, db) of
-      (D a, Dm b) -> f (D a) (Dm b)
-      (Dm a, D b) -> f (Dm a) (D b)
-      _ -> sameOrError f da db
-
-instance {-# OVERLAPPING #-} (Dim.Dimensions a, IsTensor a) =>
-         ScalarAlg (a :: [Nat]) (a :: [Nat]) where
-  type ScalarShapeAlg a a = a
-
-instance  {-# OVERLAPS #-}  ( Dim.Dimensions b
-         -- , ScalarAlg (ScalarShapeAlg '[] b) b
-         -- , ScalarAlg '[] (ScalarShapeAlg '[] b)
-         ) =>
-         ScalarAlg ('[] :: [Nat]) (b :: [Nat]) where
-  type ScalarShapeAlg '[] b = b
-
-instance {-# OVERLAPS #-}  ( Dim.Dimensions a
-         -- , ScalarAlg (ScalarShapeAlg a '[]) '[]
-         -- , ScalarAlg a (ScalarShapeAlg a '[])
-         ) =>
-         ScalarAlg a '[] where
-  type ScalarShapeAlg a '[] = a
-
-instance {-# OVERLAPPING #-} (Dim.Dimensions '[]) => ScalarAlg '[] '[] where
-  type ScalarShapeAlg '[] '[] = '[]
-
+type family ScalarShapeAlg ar br :: [Nat] where
+  ScalarShapeAlg a a = a
+  ScalarShapeAlg '[] b = b
+  ScalarShapeAlg a '[] = a
 
 
 data Noop = Noop deriving Show
@@ -495,7 +462,7 @@ sameOrError f (da :: D c ar a) (db :: D c br a) =
 
     
 handleScalarBroadcast ::
-     (P.Monad m, ScalarAlg ar br)
+     (P.Monad m)
   => (D c (ScalarShapeAlg ar br) a -> Tangent c (ScalarShapeAlg ar br) a -> ComputationT c a m (D c (ScalarShapeAlg ar br) a))
   -> D c ar a
   -> Tangent c br a
@@ -551,7 +518,7 @@ instance (DfOperable Add c ar br a) =>
             show bt ++ "  " ++ show a
 
 
-instance (DArray c ar a, DArray c br a, IsBinOp c Add ar br a, ScalarAlg ar br) =>
+instance (DArray c ar a, DArray c br a, IsBinOp c Add ar br a) =>
          DfDaBin c Add ar br a where
   --type DfDaShape ar br = ScalarShapeAlg ar br
   {-# INLINE df_da #-}
@@ -581,7 +548,7 @@ type IsBinOp c op ar br a
 
 
 instance ( IsBinOp c Add ar br a
-         , ScalarAlg ar br
+         
          --, BinOp c Add (BinCalcShape ar br) br a ~ BinOp c Add ar (BinCalcShape ar br) a
          ) =>
          BinOp c Add ar br a
