@@ -1,6 +1,7 @@
 
 extra-deps:
 - dimensions-0.3.2.0
+- tasty-1.0.1.1
 - value-supply-0.6
 - git: git@github.com:tonyday567/numhask.git
   commit: 0b4dfe39686bf40146f8c3b0018dd1e506723c9e
@@ -11,4 +12,4 @@ extra-deps:
 
 
 
-resolver: nightly-2018-04-04
+resolver: lts-12.7

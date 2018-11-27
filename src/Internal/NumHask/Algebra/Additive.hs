@@ -11,34 +11,41 @@
 {-# LANGUAGE TypeFamilies            #-}
 {-# LANGUAGE TypeFamilyDependencies  #-}
 {-# LANGUAGE TypeInType              #-}
+{-# LANGUAGE TypeApplications              #-}
 {-# LANGUAGE UndecidableInstances    #-}
 {-# LANGUAGE UndecidableSuperClasses #-}
-{-# OPTIONS_GHC -freduction-depth=10000 #-}
+{-# LANGUAGE TypeOperators #-}
 -- | A magma heirarchy for addition. The basic magma structure is repeated and prefixed with 'Additive-'.
 module Internal.NumHask.Algebra.Additive
-  ( -- AdditiveMagma(..)
+        ( -- AdditiveMagma(..)
   -- , AdditiveUnital(..)
   -- , AdditiveAssociative
   -- , AdditiveCommutative
-  AdditiveInvertible(..)
+          AdditiveInvertible(..)
   -- , AdditiveIdempotent
   -- , sum
   -- , Additive(..)
   -- , AdditiveRightCancellative(..)
   -- , AdditiveLeftCancellative(..)
-  , AdditiveGroup(..)
-  , AdditiveGroupModule(..)
-  , AdditiveBasis(..)
-  , AdditiveModule(..)
-  , Additive(..)
-  , Add(..)
-  , Negate(..)
-  ) where
+        , AdditiveGroup(..)
+        , AdditiveGroupModule(..)
+        , AdditiveBasis(..)
+        , AdditiveModule(..)
+        , Additive(..)
+        , Add(..)
+        , Negate(..)
+        )
+where
 import           Internal.Internal
-import qualified Numeric.Dimensions as Dim
-import           NumHask.Array      ()
-import           NumHask.Prelude    (Show, ($))
-import qualified NumHask.Prelude    as P
+import qualified Numeric.Dimensions            as Dim
+import           NumHask.Array                  ( )
+import           NumHask.Prelude                ( Show
+                                                , ($)
+                                                )
+import qualified NumHask.Prelude               as P
+import qualified Numeric.Dimensions         as Dim
+import qualified Numeric.Dimensions.Dim     as Dim
+
 
 data Negate = Negate deriving Show
 
@@ -47,28 +54,6 @@ class (DArray c '[] t, P.Monad m) =>
       Additive m c a b t | a -> t, b -> t, a b -> t, a b -> c where
   (+) :: a -> b -> ComputationT c t m (D c '[] t)
 
-instance (DArray c '[] t, P.Monad m) =>
-         Additive m c (D c '[] t) (D c '[] t) t where
-  (+) a b = binOp Add a b
-
-instance (DArray c '[] t, P.Monad m, m ~ m') =>
-         Additive m c (ComputationT c t m' (D c '[] t)) (D c '[] t) t where
-  (+) a b = do
-    ca <- a
-    binOp Add ca b
-
-instance (DArray c '[] t, P.Monad m, m ~ m') =>
-         Additive m c (D c '[] t) (ComputationT c t m' (D c '[] t)) t where
-  (+) a b = do
-    cb <- b
-    binOp Add a cb
-
-instance (DArray c '[] t, P.Monad m, m ~ m', m ~ m'') =>
-         Additive m c (ComputationT c t m' (D c '[] t)) (ComputationT c t m'' (D c '[] t)) t where
-  (+) a b = do
-    ca <- a
-    cb <- b
-    binOp Add ca cb
 
 class ( DArray c '[] t
       , P.Monad m
@@ -152,7 +137,7 @@ instance (P.Additive t, P.AdditiveInvertible t, Dim.Dimensions ar) =>
          MonBaseOp Negate ar t where
   type MonCalcShape ar = ar
   baseOpMon _ (D v)  = D $ P.negate v
-  baseOpMon _ (Dm v) = Dm $ P.negate v
+
 
 instance (DArray c r a) => Trace c Negate r a where
   pushAlg (U _ a) dA = P.pure [(SomeD dA, SomeD a)]
@@ -170,8 +155,8 @@ class (P.Monad m, IsTensor (GetShape a), IsBinOp c Add (GetShape a) (GetShape b)
     -> a
     -> ComputationT c t m (D c (BinCalcShape (GetShape a) (GetShape b)) t)
 
-instance (P.Monad m, IsTensor ar, IsBinOp c Add ar '[] t, m ~ m') =>
-         AdditiveModule m c (ComputationT c t m' (D c ar t)) (D c '[] t) t where
+instance (P.Monad m, IsBinOp c Add (ar : arr) '[] t, m ~ m') =>
+         AdditiveModule m c (ComputationT c t m' (D c (ar : arr) t)) (D c '[] t) t where
   (.+) a b = do
     ca <- a
     binOp Add ca b
@@ -179,8 +164,8 @@ instance (P.Monad m, IsTensor ar, IsBinOp c Add ar '[] t, m ~ m') =>
     ca <- a
     binOp Add ca b
 
-instance (P.Monad m, IsTensor ar, IsBinOp c Add ar '[] t, m ~ m', m ~ m'') =>
-         AdditiveModule m c (ComputationT c t m' (D c ar t)) (ComputationT c t m'' (D c '[] t)) t where
+instance (P.Monad m,  IsBinOp c Add (ar : arr) '[] t, m ~ m', m ~ m'') =>
+         AdditiveModule m c (ComputationT c t m' (D c (ar : arr) t)) (ComputationT c t m'' (D c '[] t)) t where
   (.+) a b = do
     ca <- a
     cb <- b
@@ -190,13 +175,13 @@ instance (P.Monad m, IsTensor ar, IsBinOp c Add ar '[] t, m ~ m', m ~ m'') =>
     cb <- b
     binOp Add cb ca
 
-instance (P.Monad m, IsTensor ar, IsBinOp c Add ar '[] t) =>
-         AdditiveModule m c (D c ar t) (D c '[] t) t where
+instance (P.Monad m, IsBinOp c Add (ar : arr) '[] t) =>
+         AdditiveModule m c (D c (ar : arr) t) (D c '[] t) t where
   (.+) a b = binOp Add a b
   (+.) a b = binOp Add b a
 
-instance (P.Monad m, IsTensor ar, IsBinOp c Add ar '[] t,m ~ m') =>
-         AdditiveModule m c (D c ar t) (ComputationT c t m' (D c '[] t)) t where
+instance (P.Monad m, IsBinOp c Add (ar : arr) '[] t,m ~ m') =>
+         AdditiveModule m c (D c (ar : arr) t) (ComputationT c t m' (D c '[] t)) t where
   (.+) a b = do
     cb <- b
     binOp Add a cb
@@ -223,12 +208,12 @@ class ( AdditiveModule m c a b t
 
 
 instance ( P.Monad m
-         , IsMonOp Negate c ar t
+         , IsMonOp Negate c (ar : arr) t
          , IsMonOp Negate c '[] t
-         , IsBinOp c Add ar '[] t
-         , P.AdditiveInvertible t,MonCalcShape '[] ~ '[]
-         , IsTensor ar) =>
-         AdditiveGroupModule m c (D c ar t) (D c '[] t) t where
+         , IsBinOp c Add (ar : arr) '[] t
+         , P.AdditiveInvertible t
+         ) =>
+         AdditiveGroupModule m c (D c (ar : arr) t) (D c '[] t) t where
   (.-) a b = do
     cb <- monOp Negate b
     binOp Add a cb
@@ -237,13 +222,12 @@ instance ( P.Monad m
     binOp Add a cb
 
 instance ( P.Monad m
-         , IsMonOp Negate c ar t
+         , IsMonOp Negate c (ar : arr) t
          , IsMonOp Negate c '[] t
-         , IsBinOp c Add ar '[] t
-         , P.AdditiveInvertible t,MonCalcShape '[] ~ '[]
-         , m ~ m'
-         , IsTensor ar) =>
-         AdditiveGroupModule m c (D c ar t) (ComputationT c t m' (D c '[] t)) t where
+         , IsBinOp c Add (ar : arr) '[] t
+         , P.AdditiveInvertible t
+         , m ~ m') =>
+         AdditiveGroupModule m c (D c (ar : arr) t) (ComputationT c t m' (D c '[] t)) t where
   (.-) a cb = do
     b <- cb
     nb <- monOp Negate b
@@ -254,14 +238,12 @@ instance ( P.Monad m
     binOp Add a nb
 
 instance ( P.Monad m
-         , IsMonOp Negate c ar t
+         , IsMonOp Negate c (ar : arr) t
          , IsMonOp Negate c '[] t
-         , IsBinOp c Add ar '[] t
-         , P.AdditiveInvertible t,MonCalcShape '[] ~ '[]
-         , m ~ m'
-          
-         , IsTensor ar) =>
-         AdditiveGroupModule m c (ComputationT c t m (D c ar t)) (D c '[] t) t where
+         , IsBinOp c Add (ar : arr) '[] t
+         , P.AdditiveInvertible t
+         , m ~ m') =>
+         AdditiveGroupModule m c (ComputationT c t m (D c (ar : arr) t)) (D c '[] t) t where
   (.-) a b = do
     ca <- a
     cb <- monOp Negate b
@@ -272,15 +254,13 @@ instance ( P.Monad m
     binOp Add ca cb
 
 instance ( P.Monad m
-         , IsMonOp Negate c ar t
+         , IsMonOp Negate c (ar : arr) t
          , IsMonOp Negate c '[] t
-         , IsBinOp c Add ar '[] t
-         , P.AdditiveInvertible t,MonCalcShape '[] ~ '[]
+         , IsBinOp c Add (ar : arr) '[] t
+         , P.AdditiveInvertible t
          , m ~ m'
-         , m ~ m''
-        
-         , IsTensor ar) =>
-         AdditiveGroupModule m c (ComputationT c t m' (D c ar t)) (ComputationT c t m'' (D c '[] t)) t where
+         , m ~ m'') =>
+         AdditiveGroupModule m c (ComputationT c t m' (D c (ar : arr) t)) (ComputationT c t m'' (D c '[] t)) t where
 
   (.-) a cb = do
     ca <- a
@@ -297,28 +277,28 @@ class AdditiveBasis m c r a b t | a b -> r, a b -> t, a b -> c where
   infixl 7 .+.
   (.+.) :: a -> b -> ComputationT c t m (D c r t)
 
-instance (P.Monad m, IsTensor s, IsBinOp c Add s s t) =>
-         AdditiveBasis m c s (D c s t) (D c s t) t where
+instance (P.Monad m, IsBinOp c Add (ar : arr) (ar : arr) t) =>
+         AdditiveBasis m c (ar : arr) (D c (ar : arr) t) (D c (ar : arr) t) t where
   (.+.) a b = binOp Add a b
 
 
-instance (P.Monad m, IsTensor s, IsBinOp c Add s s t, m ~ m') =>
-         AdditiveBasis m c s (D c s t) (ComputationT c t m' (D c s t)) t where
+instance (P.Monad m, IsBinOp c Add (ar : arr) (ar : arr) t, m ~ m') =>
+         AdditiveBasis m c (ar : arr) (D c (ar : arr) t) (ComputationT c t m' (D c (ar : arr) t)) t where
   (.+.) a b = do
     cb <- b
     binOp Add a cb
 
 
-instance (P.Monad m, IsTensor s, IsBinOp c Add s s t, m ~ m') =>
-         AdditiveBasis m c s (ComputationT c t m' (D c s t)) (D c s t) t where
+instance (P.Monad m, IsBinOp c Add (ar : arr) (ar : arr) t, m ~ m') =>
+         AdditiveBasis m c (ar : arr) (ComputationT c t m' (D c (ar : arr) t)) (D c (ar : arr) t) t where
 
   (.+.) a b = do
     ca <- a
     binOp Add ca b
 
 
-instance (P.Monad m, IsTensor s, IsBinOp c Add s s t, m ~ m', m ~ m'') =>
-         AdditiveBasis m c s (ComputationT c t m' (D c s t)) (ComputationT c t m'' (D c s t)) t where
+instance (P.Monad m, IsBinOp c Add (ar : arr) (ar : arr) t, m ~ m', m ~ m'') =>
+         AdditiveBasis m c (ar : arr) (ComputationT c t m' (D c (ar : arr) t)) (ComputationT c t m'' (D c (ar : arr) t)) t where
   (.+.) a b = do
     ca <- a
     cb <- b
@@ -331,13 +311,7 @@ instance (P.Monad m, IsTensor s, IsBinOp c Add s s t, m ~ m', m ~ m'') =>
 --
 -- > a .-. a = singleton zero
 class ( P.Monad m
-      , IsBinOp c Add r r t
-      , IsMonOp Negate c r t
-      , r ~ BinCalcShape (GetShape a) (GetShape b)
-      , GetShape a ~ MonCalcShape (GetShape a)
-      , r ~ MonCalcShape r
-      , GetShape a ~ GetShape b
-      , IsTensor (GetShape a)
+     
       , AdditiveInvertible m c b t
       )=>
       AdditiveGroupBasis m c r a b t | a b -> r, a b -> t, a b -> c where
@@ -345,26 +319,24 @@ class ( P.Monad m
   (.-.) :: a -> b -> ComputationT c t m (D c r t)
 
 instance ( P.Monad m
-         , IsBinOp c Add s s t
-         , P.AdditiveInvertible t,IsMonOp Negate c s t
-         , s ~ MonCalcShape s
-         , IsTensor s
+         , IsBinOp c Add (ar : arr) (ar : arr) t
+         , P.AdditiveInvertible t, IsMonOp Negate c (ar : arr) t
          ) =>
-         AdditiveGroupBasis m c s (D c s t) (D c s t) t where
+         AdditiveGroupBasis m c (ar : arr) (D c (ar : arr) t) (D c (ar : arr) t) t where
   (.-.) a b = do
     cb <- monOp Negate b
     binOp Add a cb
 
 
 instance ( P.Monad m
-         , IsBinOp c Add s s t
-         , IsMonOp Negate c s t
-         , s ~ MonCalcShape s
-         , AdditiveInvertible m c (ComputationT c t m' (D c s t)) t
+         , IsBinOp c Add (ar : arr) (ar : arr) t
+         , IsMonOp Negate c (ar : arr) t
+         , P.AdditiveInvertible t
+        
          , m ~ m'
-         , IsTensor s
+
          ) =>
-         AdditiveGroupBasis m c s (D c s t) (ComputationT c t m' (D c s t)) t where
+         AdditiveGroupBasis m c (ar : arr) (D c (ar : arr) t) (ComputationT c t m' (D c (ar : arr) t)) t where
   (.-.) a cb = do
     b <- cb
     nb <- monOp Negate b
@@ -372,16 +344,12 @@ instance ( P.Monad m
 
 
 instance ( P.Monad m
+         , IsBinOp c Add (ar : arr) (ar : arr) t
+         , IsMonOp Negate c (ar : arr) t
          , P.AdditiveInvertible t
-         , IsBinOp c Add s s t
-         , IsMonOp Negate c s t
-         , s ~ MonCalcShape s
-         , IsTensor s
-         , AdditiveBasis m c s (D c s t) ((ComputationT c t m' (D c s t))) t
-         , AdditiveBasis m c s ((ComputationT c t m' (D c s t))) (D c s t) t
          , m ~ m'
          ) =>
-         AdditiveGroupBasis m c s (ComputationT c t m' (D c s t)) (D c s t) t where
+         AdditiveGroupBasis m c (ar : arr) (ComputationT c t m' (D c (ar : arr) t)) (D c (ar : arr) t) t where
 
   (.-.) a b = do
     ca <- a
@@ -390,17 +358,13 @@ instance ( P.Monad m
 
 
 instance ( P.Monad m
-         , IsBinOp c Add s s t
-         , IsMonOp Negate c s t
-         , s ~ MonCalcShape s
-         , IsTensor s
-         , AdditiveInvertible m c (ComputationT c t m (D c s t)) t
-         , AdditiveBasis m c s (D c s t) ((ComputationT c t m (D c s t))) t
-         , AdditiveBasis m c s ((ComputationT c t m (D c s t))) (D c s t) t
+         , IsBinOp c Add (ar : arr) (ar : arr) t
+         , IsMonOp Negate c (ar : arr) t
+         , P.AdditiveInvertible t
          , m ~ m'
          , m ~ m''
          ) =>
-         AdditiveGroupBasis m c s (ComputationT c t m' (D c s t)) (ComputationT c t m'' (D c s t)) t where
+         AdditiveGroupBasis m c (ar : arr) (ComputationT c t m' (D c (ar : arr) t)) (ComputationT c t m'' (D c (ar : arr) t)) t where
   (.-.) a cb = do
     ca <- a
     b <- cb
@@ -408,11 +372,16 @@ instance ( P.Monad m
     binOp Add ca nb
 
 -- sum ::
---      ( Additive m c a b t
---      , P.Foldable f
+--      ( P.Foldable f
 --      )
---   => f (D c s t)
---   -> (ComputationT c t m (D c s t))
--- sum = P.foldr (.+.) zeros
+--   => f (D c (ar : arr) t)
+--   -> (ComputationT c t m (D c (ar : arr) t))
+-- sum = P.foldr (.+.) zrs
+--   where
+--     zrs :: forall s r a. (DArray s r a) => D s r a
+--     zrs = let (p :: P.Proxy r) = (P.Proxy :: P.Proxy r)
+--       in case Dim.sameDim (Dim.dim @r) (Dim.dim @('[] :: [Dim.Nat])) of
+--        P.Just Dim.Evidence -> P.zero :: D s r a
+--        P.Nothing -> (fromList $ repeat P.zero) :: D s r a
 
 

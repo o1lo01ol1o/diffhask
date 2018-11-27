@@ -12,22 +12,24 @@ category:            Math
 build-type:          Simple
 extra-source-files:  README.md
 cabal-version:       >=1.10
-tested-with:         GHC == 8.4.1
+tested-with:         GHC == 8.4.3
 
 library
   hs-source-dirs:      src
-  exposed-modules:     Core, FixPoint, Internal.NumHask.Prelude, Internal.Internal
+  exposed-modules:     Core
+                     -- , FixPoint
+                     , Internal.NumHask.Prelude, Internal.Internal
   other-modules:       
                      Internal.NumHask.Algebra
                      , Internal.NumHask.Algebra.Additive
-                     , Internal.NumHask.Algebra.Distribution
-                     , Internal.NumHask.Algebra.Field
-                     , Internal.NumHask.Algebra.Multiplicative
-                     , Internal.NumHask.Algebra.Ring
-                     , Internal.NumHask.Algebra.Magma
-                     , Internal.NumHask.Algebra.Module
-                     , Internal.NumHask.Algebra.Metric
-                     , Internal.NumHask.Algebra.Singleton
+                     -- , Internal.NumHask.Algebra.Distribution
+                     -- , Internal.NumHask.Algebra.Field
+                     -- , Internal.NumHask.Algebra.Multiplicative
+                     -- , Internal.NumHask.Algebra.Ring
+                     -- , Internal.NumHask.Algebra.Magma
+                     -- , Internal.NumHask.Algebra.Module
+                     -- , Internal.NumHask.Algebra.Metric
+                     -- , Internal.NumHask.Algebra.Singleton
  
 
   ghc-options:        -Wall -Wcompat -Wincomplete-record-updates -Wincomplete-uni-patterns -Wredundant-constraints -Wnoncanonical-monad-instances 

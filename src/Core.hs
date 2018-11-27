@@ -17,9 +17,7 @@
 {-# OPTIONS_GHC -freduction-depth=10000 #-}
 
 
-module Core
-    ( module Core
-    ) where
+module Core where
 
 import           Control.Monad.State.Strict (State, StateT, evalState,
                                              evalStateT, get, gets, modify, put,
@@ -75,28 +73,47 @@ instance (DArray s r a) => Trace s Noop  r a where
 
 addDeltas' ::
      ( P.Monad m
+     , Item (s a) ~ a
+     , Dim.Dimensions (BinCalcShape ar br)
+     , Dim.Dimensions (BinCalcShape br ar)
+     , Dim.Dimensions ar
+     , Dim.Dimensions br
+     , P.Additive a
+     , Foldable s
+     , P.MultiplicativeUnital a
+     , A.Container s
+     , Show a
+     , AdditiveBasis m s br (D s br a) (D s br a) a
+     , Additive m s (D s ar a) (D s br a) a
+     , IsList (s a)
+     , DfOperable Add s ar br a
      )
   => D s ar a
   -> D s br a
   -> ComputationT s a m (D s (BinCalcShape ar br) a)
-addDeltas' a b =
-  case (a, b) of
-    (D xa, D xb) -> a + b
-    (Dm ma, D xb) -> a .+ b
-    (D xa, Dm mb) -> a +. b
-    (Dm ma, Dm mb) ->
-      case checkSame (getDims a) (getDims b) of
-        Just Dim.Evidence -> a .+. b
-        Nothing ->
-          GHC.Err.error
-            "Dimensions of arguments to binOp should have been equal: Please report this as a bug in diffhask."
-  where
-    checkSame :: Dim.Dim ar -> Dim.Dim br -> Maybe (Dim.Evidence (ar ~ br))
-    checkSame = Dim.sameDim
-    checkTensorScalar :: Dim.Dim ar -> Dim.Dim br -> Ordering
-    checkTensorScalar = Dim.compareDim
-    checkScalarTensor = checkTensorScalar
-
+addDeltas' (a :: D c ar a) (b :: D c br a) =
+  case (inferTensor (Dim.dim @ar), inferTensor (Dim.dim @br)) of
+    (Nothing, Nothing) ->
+      case (inferScalar (Dim.dim @ar), inferScalar (Dim.dim @br), (Dim.dim @((BinCalcShape ar br)))) of
+        (Just Dim.Evidence, Just Dim.Evidence,  Dim.D) -> a + b
+        _ ->
+          GHC.Err.error $
+          "Expected tangent value of `bt` to be a scalar or of the same dimension as `a` in call to `df_db`!  Please report this as a bug in diffhask! Values:" ++
+          show b ++ "  " ++ show a
+    (Just Dim.Evidence, Just Dim.Evidence) ->
+      case Dim.sameDim (getDims a) (getDims b) of
+        Just Dim.Evidence -> (a .+. b)
+        _ ->
+          GHC.Err.error $
+          "Expected tangent value of `bt` to be a scalar or of the same dimension as `a` in call to `df_db`!  Please report this as a bug in diffhask! Values:" ++
+          show b ++ "  " ++ show a
+    (Nothing, Just Dim.Evidence) ->
+      case (inferScalar (Dim.dim @ar), Dim.sameDim (Dim.dim @((BinCalcShape ar br))) (Dim.dim @((BinCalcShape br ar)))) of
+        (Just Dim.Evidence, Just Dim.Evidence) ->  ((unsafeCoerce a +. unsafeCoerce b) :: (AdditiveModule m c (D c ar a) (D c br a) a ) => ComputationT c a m (D c br a))
+    (Just Dim.Evidence, Nothing) ->
+      case inferScalar (Dim.dim @br) of
+        Just Dim.Evidence -> a .+ b
+        
 handleAnyD ::  SomeD c a -> (forall r. DArray c r a => D c r a -> rv) -> rv
 handleAnyD =
   \case
@@ -421,5 +438,4 @@ jacobian :: (P.Monad m, DArray s r a) =>
   -> Primal s r a
   -> ComputationT s a m (Tangent s r a)
 jacobian f x v = snd <$> jacobian' f x v
-
 
