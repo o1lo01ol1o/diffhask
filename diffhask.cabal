@@ -1,6 +1,6 @@
 name:                diffhask
 version:             0.1.0.0
-description:         DSL for forward and reverse mode automatic differentiation in haskell.  instpired by DiffSharp.
+description:         DSL for forward and reverse mode automatic differentiation in haskell.  Port of DiffSharp.
 homepage:            https://github.com/o1lo01ol1o/diffhask
 bug-reports:         https://github.com/o1lo01ol1o/diffhask/issues
 license:             MIT
@@ -12,21 +12,43 @@ category:            Math
 build-type:          Simple
 extra-source-files:  README.md
 cabal-version:       >=1.10
-tested-with:         GHC == 8.2.2
+tested-with:         GHC == 8.4.3
 
 library
   hs-source-dirs:      src
-  exposed-modules:     Core, Num
-  ghc-options:         -Wall -fllvm -O2
-  default-extensions: NegativeLiterals OverloadedStrings UnicodeSyntax
-  build-depends:       base
+  exposed-modules:     Core
+                     -- , FixPoint
+                     , Internal.NumHask.Prelude, Internal.Internal
+  other-modules:       
+                     Internal.NumHask.Algebra
+                     , Internal.NumHask.Algebra.Additive
+                     -- , Internal.NumHask.Algebra.Distribution
+                     -- , Internal.NumHask.Algebra.Field
+                     -- , Internal.NumHask.Algebra.Multiplicative
+                     -- , Internal.NumHask.Algebra.Ring
+                     -- , Internal.NumHask.Algebra.Magma
+                     -- , Internal.NumHask.Algebra.Module
+                     -- , Internal.NumHask.Algebra.Metric
+                     -- , Internal.NumHask.Algebra.Singleton
+ 
+
+  ghc-options:        -Wall -Wcompat -Wincomplete-record-updates -Wincomplete-uni-patterns -Wredundant-constraints -Wnoncanonical-monad-instances 
+  default-extensions: NegativeLiterals UnicodeSyntax ScopedTypeVariables FlexibleContexts LambdaCase 
+  build-depends:       base 
                      , value-supply
                      , containers
                      , mtl
                      , text
                      , microlens
-                     , microlens-th
                      , vector
+                     , protolude
+                     , dimensions
+                     , numhask
+                     , numhask-prelude
+                     , numhask-array
+                     , constraints
+                     
+
 
   default-language:    Haskell2010
 
@@ -34,27 +56,36 @@ test-suite diffhask-test
   type:                exitcode-stdio-1.0
   hs-source-dirs:      test
   main-is:             Spec.hs
-  default-extensions: NegativeLiterals OverloadedStrings UnicodeSyntax
-  build-depends:       base
+  default-extensions: NegativeLiterals OverloadedStrings UnicodeSyntax ScopedTypeVariables FlexibleContexts NoImplicitPrelude
+  build-depends:       base 
                      , diffhask
-                       , text
+                     , text
                      , QuickCheck
                      , doctest
                      , tasty
                      , tasty-quickcheck
+                     , tasty-hunit 
+                     , numhask
+                     , numhask-prelude
+                     , numhask-array
+
   
-  ghc-options:         -Wall -Werror -threaded -fllvm -O2 -rtsopts -with-rtsopts=-N
+  ghc-options:         -Wall  -threaded  -rtsopts -with-rtsopts=-N
   default-language:    Haskell2010
 
 benchmark diffhask-benchmark 
   type:                exitcode-stdio-1.0
   default-language:    Haskell2010
-  ghc-options:         -Wall -Werror -O2 -fllvm -threaded -rtsopts -with-rtsopts=-N
+  ghc-options:         -Wall -O2 -fllvm -threaded -rtsopts -with-rtsopts=-N
   hs-source-dirs:      benchmark
   main-is:             Main.hs
-  build-depends:       base
+  build-depends:       base 
                      , criterion
                      , diffhask
+                     , numhask
+                     , numhask-prelude
+                     , numhask-array
+
 
 source-repository head
   type:                git

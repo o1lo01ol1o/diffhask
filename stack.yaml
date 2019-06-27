@@ -1,9 +1,15 @@
-flags: {}
-packages:
-- .
+
 extra-deps:
-- colour-2.3.3
-- criterion-1.2.4.0
-- tasty-0.12
+- dimensions-0.3.2.0
+- tasty-1.0.1.1
 - value-supply-0.6
-resolver: lts-10.2
+- git: git@github.com:tonyday567/numhask.git
+  commit: 0b4dfe39686bf40146f8c3b0018dd1e506723c9e
+  subdirs:
+    - numhask
+    - numhask-prelude
+    - numhask-array
+
+
+
+resolver: lts-12.7

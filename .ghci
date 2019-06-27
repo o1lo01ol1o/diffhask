@@ -1,0 +1,2 @@
+:set -XDataKinds -XTypeFamilies -XFlexibleContexts -XScopedTypeVariables -XGADTs -XNoImplicitPrelude -XOverloadedLists
+ 
